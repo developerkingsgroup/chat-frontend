@@ -54,7 +54,7 @@ Now that you have successfully run the app, let's modify it.
 2. For **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Developer Menu** (<kbd>Ctrl</kbd> + <kbd>M</kbd> (on Window and Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (on macOS)) to see your changes!
 
    For **iOS**: Hit <kbd>Cmd ⌘</kbd> + <kbd>R</kbd> in your iOS Simulator to reload the app and see your changes!
-
+run 
 ## Congratulations! :tada:
 
 You've successfully run and modified your React Native App. :partying_face:
@@ -77,3 +77,81 @@ To learn more about React Native, take a look at the following resources:
 - [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
 - [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
 - [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+
+
+npx react-native run-android --no-packager
+
+
+
+✦ To build a shareable APK for your React Native app, you have two main options depending on your needs:
+
+  Option 1: Generate a Debug APK (Quickest for testing)
+  If you just want to quickly share the app with someone for testing, you can generate a debug APK. It doesn't require
+  setting up signing keys.
+
+   1. Open your terminal in the project root.
+   2. Navigate to the android folder:
+
+   1     cd android
+   3. Run the build command:
+
+   1     ./gradlew assembleDebug
+   4. Once finished, your APK will be located at:
+      android/app/build/outputs/apk/debug/app-debug.apk
+
+  ---
+
+  Option 2: Generate a Release APK (Recommended for distribution)
+  This creates a optimized, signed version of the app.
+
+  1. Generate a Signing Key (if you don't have one)
+  Run this command in your terminal (replace my-release-key with your preferred name):
+
+   1 keytool -genkeypair -v -storetype PKCS12 -keystore my-release-key.keystore -alias my-key-alias -keyalg RSA
+     -keysize 2048 -validity 10000
+  Note: Keep this file safe! You'll need it for all future updates.
+
+  2. Configure Gradle
+   1. Place the my-release-key.keystore file in the android/app directory.
+   2. Edit android/gradle.properties and add the following (replace with your actual passwords):
+
+   1     MYAPP_RELEASE_STORE_FILE=my-release-key.keystore
+   2     MYAPP_RELEASE_KEY_ALIAS=my-key-alias
+   3     MYAPP_RELEASE_STORE_PASSWORD=*****
+   4     MYAPP_RELEASE_KEY_PASSWORD=*****
+
+  3. Update android/app/build.gradle
+  Ensure your signingConfigs and buildTypes look like this:
+
+    1 android {
+    2     ...
+    3     signingConfigs {
+    4         release {
+    5             if (project.hasProperty('MYAPP_RELEASE_STORE_FILE')) {
+    6                 storeFile file(MYAPP_RELEASE_STORE_FILE)
+    7                 storePassword MYAPP_RELEASE_STORE_PASSWORD
+    8                 keyAlias MYAPP_RELEASE_KEY_ALIAS
+    9                 keyPassword MYAPP_RELEASE_KEY_PASSWORD
+   10             }
+   11         }
+   12     }
+   13     buildTypes {
+   14         release {
+   15             ...
+   16             signingConfig signingConfigs.release
+   17         }
+   18     }
+   19 }
+
+  4. Build the APK
+  Run these commands:
+   1 cd android
+   2 ./gradlew assembleRelease
+  Your shareable APK will be at:
+  android/app/build/outputs/apk/release/app-release.apk
+
+  Summary Tip
+  If you just need to share the app right now without any setup, Option 1 is the fastest. If you are preparing for a
+  public release, use Option 2.
+
+  store password - travkingchat
