@@ -18,6 +18,7 @@ import ChatScreen                      from './src/screens/ChatScreen';
 import GroupsScreen                    from './src/screens/GroupsScreen';
 import RemindersScreen                 from './src/screens/RemindersScreen';
 import { CallsScreen, CallScreen, SettingsScreen } from './src/screens/OtherScreens';
+import { ManageUserScreen, ManageCompanyScreen, ManageBranchScreen, ManageDeptScreen } from './src/screens/ManageScreens';
 
 const Stack = createStackNavigator();
 const Tab   = createBottomTabNavigator();
@@ -220,7 +221,7 @@ function Root() {
       <View style={{ flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center', gap: 16 }}>
         <Text style={{ fontSize: 50 }}>✈️</Text>
         <ActivityIndicator color={C.blue} size="large" />
-        <Text style={[T.mono, { fontSize: 16, color: '#60A5FA' }]}>TravKings & Partnersdd</Text>
+        <Text style={{ fontSize: 16, color: '#60A5FA', fontWeight: '600' }}>TravKings & Partners</Text>
       </View>
     );
   }
@@ -239,6 +240,11 @@ function Root() {
                 headerRight: () => null, // added dynamically in ChatScreen
               })} />
             <Stack.Screen name="Call" component={CallScreen} options={{ headerShown: false, presentation: 'fullScreenModal' }} />
+            
+            <Stack.Screen name="ManageUser" component={ManageUserScreen} options={{ title: 'Manage User' }} />
+            <Stack.Screen name="ManageCompany" component={ManageCompanyScreen} options={{ title: 'Manage Company' }} />
+            <Stack.Screen name="ManageBranch" component={ManageBranchScreen} options={{ title: 'Manage Branch' }} />
+            <Stack.Screen name="ManageDept" component={ManageDeptScreen} options={{ title: 'Manage Department' }} />
           </>
         )}
       </Stack.Navigator>

@@ -247,7 +247,7 @@ export function SettingsScreen({ navigation }) {
             <View style={{ flex:1, minWidth:0 }}>
               <View style={{ flexDirection:'row', alignItems:'center', gap:6 }}>
                 <Text style={T.h3} numberOfLines={1}>{u.name}</Text>
-                {u.is_super_admin && <Text style={{fontSize:12}}>👑</Text>}
+                {!!u.is_super_admin && <Text style={{fontSize:12}}>👑</Text>}
               </View>
               <Text style={[T.sm,{color:u.color||C.text3,marginTop:1}]}>{u.is_super_admin?'Super Admin':(u.role||'User')}</Text>
             </View>

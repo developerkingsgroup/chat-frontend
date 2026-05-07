@@ -5,7 +5,7 @@ import {
   KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { useApp } from '../context/AppContext';
-import { login, register } from '../utils/api';
+import { BASE_URL, login, register } from '../utils/api';
 import { C, T, Field, PrimaryBtn } from '../components/UI';
 
 const ROLES = ['User','Branch Manager','General Manager','Finance Head','Marketing Lead','Ticketing Exec'];
@@ -29,6 +29,7 @@ export default function AuthScreen() {
         : await register({ name:name.trim(), email:email.trim(), password, role });
       await signIn(res.data.token, res.data.user);
     } catch (e) {
+      console.log("eeeeee",JSON.stringify(e))
       Alert.alert('Error', e.response?.data?.error || 'Something went wrong. Check your connection.');
     } finally { setBusy(false); }
   };
@@ -41,7 +42,7 @@ export default function AuthScreen() {
         <View style={{ alignItems:'center', marginBottom:40 }}>
           <Text style={{ fontSize:56, marginBottom:10 }}>✈️🏨</Text>
           <Text style={{ fontSize:24, fontWeight:'700', color:C.blue, fontFamily:'Courier New' }}>TravKings & Partners dd</Text>
-          <Text style={[T.sm, { marginTop:4 }]}>Internal messaging platform</Text>
+          <Text style={[T.sm, { marginTop:4 }]}>Internal messaging platform {BASE_URL}</Text>
         </View>
 
         {/* Mode tabs */}

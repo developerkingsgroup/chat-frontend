@@ -155,3 +155,6 @@ npx react-native run-android --no-packager
   public release, use Option 2.
 
   store password - travkingchat
+
+# run on android pone via data cable
+  adb reverse tcp:8081 tcp:8081; cd TravKings2; npm run android 
