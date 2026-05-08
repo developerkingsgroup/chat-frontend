@@ -2,19 +2,32 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const BASE_URL = 'https://chat-backend-production-644a.up.railway.app';
-export const WS_URL   = 'wss://chat-backend-production-644a.up.railway.app';
-// export const BASE_URL = 'http://192.168.1.3:4000';
-// export const WS_URL = 'http://192.168.1.3:4000';
+// export const BASE_URL = 'https://chat-backend-production-644a.up.railway.app';
+// export const WS_URL   = 'wss://chat-backend-production-644a.up.railway.app';
+export const BASE_URL = 'http://192.168.1.3:4000';
+export const WS_URL = 'ws://192.168.1.3:4000';
 
 const api = axios.create({baseURL: `${BASE_URL}/api`});
 
 // Attach token automatically
-api.interceptors.request.use(async config => {
-  const token = await AsyncStorage.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+api.interceptors.request.use(
+  async config => {
+    const token = await AsyncStorage.getItem('token');
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+
+    // Log the request (Clean version)
+    console.log(
+      `🚀 [${config.method.toUpperCase()}] ${config.baseURL+config.url}`,
+      config.data || '',
+    );
+
+    return config;
+  },
+  error => {
+    console.log('❌ Request Error:', error);
+    return Promise.reject(error);
+  },
+);
 
 // Auth
 export const login = (email, password) =>

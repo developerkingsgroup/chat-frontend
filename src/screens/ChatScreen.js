@@ -133,7 +133,9 @@ export default function ChatScreen({ route, navigation }) {
     try {
       const r = await sendMessage({ chat_id:chatId, chat_type:chatType, type:'text', content:text });
       pushMessage(chatType, chatId, r.data);
-    } catch {}
+    } catch (err) {
+      Alert.alert('Error', 'Could not send message');
+    }
   };
 
   const startRec = async () => {
@@ -202,7 +204,7 @@ export default function ChatScreen({ route, navigation }) {
               onContentSizeChange={()=>flatRef.current?.scrollToEnd({animated:false})}
               renderItem={({item})=><Bubble msg={item} currentUserId={currentUser?.id} accent={ac}/>}
               contentContainerStyle={{ paddingVertical:10 }}
-              ListEmptyComponent={<View style={{alignItems:'center',paddingTop:60}}><Text style={{fontSize:36}}>💬</Text><Text style={[T.sm,{marginTop:8}]}>No messages yet</Text></View>}
+              ListEmptyComponent={<View style={{alignItems:'center',paddingTop:60}}><Text style={{fontSize:36}}>💬</Text><Text style={[T.sm,{marginTop:8}]}>No messages yet s</Text></View>}
             />
         }
 
