@@ -336,7 +336,8 @@ function ReminderModal({visible, reminder, users, currentUser, onClose, onSave})
   const [forUser, setForUser] = useState(currentUser?.id || '');
   const [dueDate, setDueDate] = useState(new Date());
   const [showDate, setShowDate] = useState(false);
-  const [userSearch, setUserSearch] = useState('');
+  const [userSearch,        setUserSearch]        = useState('');
+  const [userSearchFocused, setUserSearchFocused] = useState(false);
 
   useEffect(() => {
     setUserSearch('');
@@ -381,9 +382,11 @@ function ReminderModal({visible, reminder, users, currentUser, onClose, onSave})
     ]);
   };
 
+  // Default: only show self. On search focus: show all. On search text: filter all.
   const filteredUsers = (users || []).filter(u => {
-    if (!userSearch.trim()) return true;
-    const q = userSearch.toLowerCase();
+    const q = userSearch.toLowerCase().trim();
+    if (!q && !userSearchFocused) return u.id === currentUser?.id;
+    if (!q) return true;
     return u.name?.toLowerCase().includes(q) || u.role?.toLowerCase().includes(q);
   });
 
@@ -488,7 +491,9 @@ function ReminderModal({visible, reminder, users, currentUser, onClose, onSave})
           </View>
 
           <Field placeholder="Search users by name or role..." value={userSearch}
-            onChangeText={setUserSearch} inputStyle={{marginBottom: 12}} />
+            onChangeText={setUserSearch} inputStyle={{marginBottom: 12}}
+            onFocus={() => setUserSearchFocused(true)}
+            onBlur={() => setUserSearchFocused(false)} />
 
           {Object.entries(roleGroups).map(([role, grpUsers]) => (
             <View key={role} style={{marginBottom: 10}}>
@@ -797,22 +802,16 @@ export default function RemindersScreen({navigation}) {
         {/* ── Mine tab ── */}
         {view === 'mine' && (
           <>
-            {pending.length === 0 && done.length === 0 && (
+            {pending.length === 0 && (
               <View style={{alignItems: 'center', paddingTop: 60}}>
                 <Text style={{fontSize: 32}}>🔔</Text>
-                <Text style={[T.sm, {marginTop: 8}]}>No reminders</Text>
+                <Text style={[T.sm, {marginTop: 8}]}>No pending reminders</Text>
               </View>
             )}
             {pending.length > 0 && (
               <>
                 <SectionLabel text="Pending" count={pending.length} />
                 {pending.map(r => <RCard key={r.id} r={r} currentUser={currentUser} users={users} onPress={openDetail} onAction={handleAction} />)}
-              </>
-            )}
-            {done.length > 0 && (
-              <>
-                <SectionLabel text="Completed" count={done.length} />
-                {done.map(r => <RCard key={r.id} r={r} currentUser={currentUser} users={users} onPress={openDetail} onAction={handleAction} />)}
               </>
             )}
           </>
