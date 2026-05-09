@@ -64,25 +64,30 @@ export function AppProvider({ children }) {
     const { event, data } = payload;
 
     if (event === 'new_message') {
+      const me = currentUserRef.current?.id;
       const key = data.chat_type === 'group'
         ? `group_${data.chat_id}`
         : `direct_${[data.chat_id, data.sender_id].sort().join('_')}`;
       setMessages(prev => ({ ...prev, [key]: [...(prev[key] || []), data] }));
+      const isOwn = data.sender_id === me;
       if (data.chat_type === 'group') {
-        setChatGroups(prev => prev.map(g => g.id === data.chat_id ? { ...g, unread: (g.unread||0)+1, last_message: data } : g));
+        setChatGroups(prev => prev.map(g => g.id === data.chat_id
+          ? { ...g, unread: isOwn ? (g.unread||0) : (g.unread||0)+1, last_message: data }
+          : g));
       } else {
         setConversations(prev => prev.map(c => {
           const matches = c.user?.id === data.sender_id || c.user?.id === data.chat_id;
-          return matches ? { ...c, unread: (c.unread||0)+1, last_message: data } : c;
+          if (!matches) return c;
+          return { ...c, unread: isOwn ? (c.unread||0) : (c.unread||0)+1, last_message: data };
         }));
       }
     }
 
     if (event === 'message_updated') {
-      const me = currentUserRef.current?.id;
+      // Use sender_id + chat_id to reconstruct the key — works for both sender and recipient
       const key = data.chat_type === 'group'
         ? `group_${data.chat_id}`
-        : `direct_${[data.chat_id, me].sort().join('_')}`;
+        : `direct_${[data.sender_id, data.chat_id].sort().join('_')}`;
       setMessages(prev => {
         const msgs = prev[key];
         if (!msgs) return prev;
@@ -163,14 +168,23 @@ export function AppProvider({ children }) {
   const getKey = (type, id1, id2) =>
     type === 'group' ? `group_${id1}` : `direct_${[id1, id2].sort().join('_')}`;
 
-  const loadMessages = (type, chatId, msgs) => {
-    const key = getKey(type, chatId);
+  const loadMessages = (type, chatId, msgs, myId) => {
+    const key = type === 'group' ? `group_${chatId}` : `direct_${[chatId, myId].sort().join('_')}`;
     setMessages(prev => ({ ...prev, [key]: msgs }));
   };
 
-  const pushMessage = (type, chatId, msg) => {
-    const key = getKey(type, chatId);
+  const pushMessage = (type, chatId, msg, myId) => {
+    const key = type === 'group' ? `group_${chatId}` : `direct_${[chatId, myId].sort().join('_')}`;
     setMessages(prev => ({ ...prev, [key]: [...(prev[key]||[]), msg] }));
+  };
+
+  const updateMessage = (type, chatId, updatedMsg, myId) => {
+    const key = type === 'group' ? `group_${chatId}` : `direct_${[chatId, myId].sort().join('_')}`;
+    setMessages(prev => {
+      const msgs = prev[key];
+      if (!msgs) return prev;
+      return { ...prev, [key]: msgs.map(m => m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m) };
+    });
   };
 
   const clearUnread = (type, chatId) => {
@@ -189,7 +203,7 @@ export function AppProvider({ children }) {
       chatGroups, conversations, messages, loading, reminderSignal,
       onlineUsers, typingMap, chatUnread, groupUnread, getKey,
       signIn, signOut, loadAll, sendWsFrame,
-      loadMessages, pushMessage, clearUnread,
+      loadMessages, pushMessage, updateMessage, clearUnread,
       setUsers, setCompanies, setChatGroups, setConversations,
     }}>
       {children}

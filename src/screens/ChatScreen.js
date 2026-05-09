@@ -116,7 +116,7 @@ function Bubble({ msg, currentUserId, accent, onLongPress }) {
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function ChatScreen({ route, navigation }) {
   const { chatType, chatId, title, subtitle, avatar, color } = route.params;
-  const { currentUser, messages:allMsgs, loadMessages, pushMessage, clearUnread, sendWsFrame, typingMap, users, chatGroups, isAdmin } = useApp();
+  const { currentUser, messages:allMsgs, loadMessages, pushMessage, updateMessage, clearUnread, sendWsFrame, typingMap, users, chatGroups, isAdmin } = useApp();
 
   const [input,       setInput]       = useState('');
   const [recording,   setRecording]   = useState(false);
@@ -189,7 +189,7 @@ export default function ChatScreen({ route, navigation }) {
   const fetchMessages = async () => {
     try {
       const r = await getMessages(chatType, chatId, { limit:50 });
-      loadMessages(chatType, chatId, r.data);
+      loadMessages(chatType, chatId, r.data, currentUser?.id);
       clearUnread(chatType, chatId);
     } catch { Alert.alert('Error','Could not load messages'); }
     finally { setLoading(false); }
@@ -201,11 +201,13 @@ export default function ChatScreen({ route, navigation }) {
     AsyncStorage.removeItem(draftKey);
     try {
       if (editingId) {
-        await editMessage(editingId, text);
+        const editId = editingId;
         setEditingId(null);
+        updateMessage(chatType, chatId, { id: editId, content: text, is_edited: true }, currentUser?.id);
+        await editMessage(editId, text);
       } else {
         const r = await sendMessage({ chat_id:chatId, chat_type:chatType, type:'text', content:text });
-        pushMessage(chatType, chatId, r.data);
+        pushMessage(chatType, chatId, r.data, currentUser?.id);
       }
     } catch (err) {
       Alert.alert('Error', 'Could not send message');
@@ -216,7 +218,10 @@ export default function ChatScreen({ route, navigation }) {
     if (msg.sender_id !== currentUser?.id) return;
     Alert.alert('Message', msg.content?.slice(0,60), [
       { text: 'Edit', onPress: () => { setInput(msg.content); setEditingId(msg.id); } },
-      { text: 'Delete', style:'destructive', onPress: () => deleteMessage(msg.id).catch(()=>{}) },
+      { text: 'Delete', style:'destructive', onPress: () => {
+          updateMessage(chatType, chatId, { id: msg.id, is_deleted: true, content: 'This message was deleted' }, currentUser?.id);
+          deleteMessage(msg.id).catch(()=>{});
+        }},
       { text: 'Cancel', style:'cancel' },
     ]);
   };
@@ -237,7 +242,7 @@ export default function ChatScreen({ route, navigation }) {
       fd.append('file', { uri, name:'voice.m4a', type:'audio/m4a' });
       const up = await uploadFile(fd);
       const r  = await sendMessage({ chat_id:chatId, chat_type:chatType, type:'voice', file_url:up.data.url, duration:dur });
-      pushMessage(chatType, chatId, r.data);
+      pushMessage(chatType, chatId, r.data, currentUser?.id);
     } catch {}
   };
 
@@ -251,7 +256,7 @@ export default function ChatScreen({ route, navigation }) {
     const up  = await uploadFile(fd);
     const isVideo = img.type?.startsWith('video/');
     const r   = await sendMessage({ chat_id:chatId, chat_type:chatType, type: isVideo ? 'video' : 'image', file_url:up.data.url, file_name:img.fileName });
-    pushMessage(chatType, chatId, r.data);
+    pushMessage(chatType, chatId, r.data, currentUser?.id);
   };
 
   const pickDoc = async () => {
@@ -262,7 +267,7 @@ export default function ChatScreen({ route, navigation }) {
       fd.append('file', { uri:res.uri, name:res.name, type:res.type||'application/octet-stream' });
       const up = await uploadFile(fd);
       const r  = await sendMessage({ chat_id:chatId, chat_type:chatType, type:'file', file_url:up.data.url, file_name:res.name, file_size:up.data.size });
-      pushMessage(chatType, chatId, r.data);
+      pushMessage(chatType, chatId, r.data, currentUser?.id);
     } catch {}
   };
 
