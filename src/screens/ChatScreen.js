@@ -8,7 +8,7 @@ import AudioRecorderPlayer from 'react-native-audio-recorder-player';
 import { launchImageLibrary } from 'react-native-image-picker';
 import DocumentPicker from 'react-native-document-picker';
 import { useApp } from '../context/AppContext';
-import { getMessages, sendMessage, uploadFile, logCall } from '../utils/api';
+import { getMessages, sendMessage, uploadFile, logCall, searchMessages } from '../utils/api';
 import { C, T, Avatar, Screen } from '../components/UI';
 import moment from 'moment';
 
@@ -110,11 +110,14 @@ export default function ChatScreen({ route, navigation }) {
   const { chatType, chatId, title, subtitle, avatar, color } = route.params;
   const { currentUser, messages:allMsgs, loadMessages, pushMessage, clearUnread, sendWsFrame, typingMap, users } = useApp();
 
-  const [input,     setInput]     = useState('');
-  const [recording, setRecording] = useState(false);
-  const [recSecs,   setRecSecs]   = useState(0);
-  const [showAtt,   setShowAtt]   = useState(false);
-  const [loading,   setLoading]   = useState(true);
+  const [input,       setInput]       = useState('');
+  const [recording,   setRecording]   = useState(false);
+  const [recSecs,     setRecSecs]     = useState(0);
+  const [showAtt,     setShowAtt]     = useState(false);
+  const [loading,     setLoading]     = useState(true);
+  const [searchMode,  setSearchMode]  = useState(false);
+  const [searchQ,     setSearchQ]     = useState('');
+  const [searchRes,   setSearchRes]   = useState([]);
 
   const flatRef     = useRef(null);
   const recTimer    = useRef(null);
@@ -130,17 +133,32 @@ export default function ChatScreen({ route, navigation }) {
   const key  = chatType==='group' ? `group_${chatId}` : `direct_${[chatId, currentUser?.id].sort().join('_')}`;
   const msgs = allMsgs[key] || [];
 
+  const runSearch = async (q) => {
+    setSearchQ(q);
+    if (!q.trim()) { setSearchRes([]); return; }
+    try {
+      const r = await searchMessages(q, chatType, chatId);
+      setSearchRes(r.data);
+    } catch {}
+  };
+
   useEffect(() => {
     navigation.setOptions({
       title,
-      headerRight: chatType==='direct' ? () => (
+      headerRight: () => (
         <View style={{ flexDirection:'row', gap:8, marginRight:10 }}>
-          <TouchableOpacity onPress={()=>navigation.navigate('Call',{userId:chatId,userName:title,userAvatar:avatar,userColor:color,callType:'voice'})}
-            style={{ backgroundColor:'#14532D', padding:8, borderRadius:9 }}><Text style={{fontSize:16}}>📞</Text></TouchableOpacity>
-          <TouchableOpacity onPress={()=>navigation.navigate('Call',{userId:chatId,userName:title,userAvatar:avatar,userColor:color,callType:'video'})}
-            style={{ backgroundColor:'#1E3A5F', padding:8, borderRadius:9 }}><Text style={{fontSize:16}}>📹</Text></TouchableOpacity>
+          <TouchableOpacity onPress={()=>setSearchMode(m=>!m)}
+            style={{ backgroundColor:searchMode?C.blue2:C.card, padding:8, borderRadius:9, borderWidth:1, borderColor:C.border2 }}>
+            <Text style={{fontSize:16}}>🔍</Text>
+          </TouchableOpacity>
+          {chatType==='direct' && <>
+            <TouchableOpacity onPress={()=>navigation.navigate('Call',{userId:chatId,userName:title,userAvatar:avatar,userColor:color,callType:'voice'})}
+              style={{ backgroundColor:'#14532D', padding:8, borderRadius:9 }}><Text style={{fontSize:16}}>📞</Text></TouchableOpacity>
+            <TouchableOpacity onPress={()=>navigation.navigate('Call',{userId:chatId,userName:title,userAvatar:avatar,userColor:color,callType:'video'})}
+              style={{ backgroundColor:'#1E3A5F', padding:8, borderRadius:9 }}><Text style={{fontSize:16}}>📹</Text></TouchableOpacity>
+          </>}
         </View>
-      ) : undefined,
+      ),
     });
     fetchMessages();
     return () => clearInterval(recTimer.current);
@@ -220,6 +238,30 @@ export default function ChatScreen({ route, navigation }) {
           <Text style={{ fontSize:11, color:C.text4 }} onPress={()=>navigation.navigate('Groups')}>Groups</Text>
           <Text style={{ color:C.text4, fontSize:11 }}> › </Text>
           <Text style={{ fontSize:11, color:ac, fontWeight:'600' }}>{subtitle}</Text>
+        </View>
+      )}
+
+      {searchMode && (
+        <View style={{ backgroundColor:C.surface, borderBottomWidth:1, borderBottomColor:C.border }}>
+          <TextInput
+            style={{ margin:10, padding:10, backgroundColor:C.card, borderRadius:10, color:C.text, borderWidth:1, borderColor:C.border2 }}
+            placeholder='Search messages…' placeholderTextColor={C.text4}
+            value={searchQ} onChangeText={runSearch} autoFocus
+          />
+          {searchRes.length > 0 && (
+            <FlatList
+              data={searchRes}
+              keyExtractor={m=>m.id}
+              style={{ maxHeight:240 }}
+              renderItem={({item}) => (
+                <TouchableOpacity style={{ padding:12, borderBottomWidth:1, borderBottomColor:C.border }}
+                  onPress={()=>setSearchMode(false)}>
+                  <Text style={{ color:C.text3, fontSize:11 }}>{item.sender_name} · {moment(item.created_at).format('MMM D')}</Text>
+                  <Text style={{ color:C.text2, fontSize:13, marginTop:2 }} numberOfLines={2}>{item.content}</Text>
+                </TouchableOpacity>
+              )}
+            />
+          )}
         </View>
       )}
 
