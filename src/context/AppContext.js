@@ -17,6 +17,7 @@ export function AppProvider({ children }) {
   const [messages,      setMessages]      = useState({}); // { `${type}_${id}`: [] }
   const [loading,       setLoading]       = useState(true);
   const [onlineUsers,   setOnlineUsers]   = useState(new Set());
+  const [typingMap,     setTypingMap]     = useState({}); // { "group_id" | "direct_id": Set<userId> }
   const wsRef = useRef(null);
   const currentUserRef = useRef(null);
 
@@ -89,6 +90,21 @@ export function AppProvider({ children }) {
       });
     }
 
+    if (event === 'user_typing') {
+      const me = currentUserRef.current?.id;
+      const key = data.chatType === 'group'
+        ? `group_${data.chatId}`
+        : `direct_${[data.chatId, me].sort().join('_')}`;
+      setTypingMap(prev => {
+        const next = { ...prev };
+        const set = new Set(next[key] || []);
+        if (data.isTyping) set.add(data.userId);
+        else set.delete(data.userId);
+        next[key] = set;
+        return next;
+      });
+    }
+
     if (event === 'user_presence') {
       setOnlineUsers(prev => {
         const next = new Set(prev);
@@ -125,6 +141,12 @@ export function AppProvider({ children }) {
     setLoading(false);
   };
 
+  // ── WebSocket send helper ────────────────────────────────────────────────────
+  const sendWsFrame = useCallback((obj) => {
+    const ws = wsRef.current;
+    if (ws?.readyState === 1) ws.send(JSON.stringify(obj));
+  }, []);
+
   // ── Message helpers ──────────────────────────────────────────────────────────
   const getKey = (type, id1, id2) =>
     type === 'group' ? `group_${id1}` : `direct_${[id1, id2].sort().join('_')}`;
@@ -153,8 +175,8 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       token, currentUser, isAdmin, users, companies, departments,
       chatGroups, conversations, messages, loading, reminderSignal,
-      onlineUsers, chatUnread, groupUnread, getKey,
-      signIn, signOut, loadAll,
+      onlineUsers, typingMap, chatUnread, groupUnread, getKey,
+      signIn, signOut, loadAll, sendWsFrame,
       loadMessages, pushMessage, clearUnread,
       setUsers, setCompanies, setChatGroups, setConversations,
     }}>

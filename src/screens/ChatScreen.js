@@ -87,7 +87,7 @@ function Bubble({ msg, currentUserId, accent }) {
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function ChatScreen({ route, navigation }) {
   const { chatType, chatId, title, subtitle, avatar, color } = route.params;
-  const { currentUser, messages:allMsgs, loadMessages, pushMessage, clearUnread } = useApp();
+  const { currentUser, messages:allMsgs, loadMessages, pushMessage, clearUnread, sendWsFrame, typingMap, users } = useApp();
 
   const [input,     setInput]     = useState('');
   const [recording, setRecording] = useState(false);
@@ -95,9 +95,16 @@ export default function ChatScreen({ route, navigation }) {
   const [showAtt,   setShowAtt]   = useState(false);
   const [loading,   setLoading]   = useState(true);
 
-  const flatRef  = useRef(null);
-  const recTimer = useRef(null);
-  const ac       = color || C.blue;
+  const flatRef     = useRef(null);
+  const recTimer    = useRef(null);
+  const typingTimer = useRef(null);
+  const ac          = color || C.blue;
+
+  const chatKey = key;
+  const typingUsers = typingMap[chatKey] || new Set();
+  const typingNames = [...typingUsers]
+    .map(uid => users.find(u => u.id === uid)?.name || 'Someone')
+    .join(', ');
 
   const key  = chatType==='group' ? `group_${chatId}` : `direct_${[chatId, currentUser?.id].sort().join('_')}`;
   const msgs = allMsgs[key] || [];
@@ -227,6 +234,13 @@ export default function ChatScreen({ route, navigation }) {
           </View>
         )}
 
+        {/* Typing indicator */}
+        {typingUsers.size > 0 && (
+          <View style={{ paddingHorizontal:16, paddingVertical:5, backgroundColor:C.surface, borderTopWidth:1, borderTopColor:C.border }}>
+            <Text style={{ fontSize:12, color:C.text4, fontStyle:'italic' }}>{typingNames} {typingUsers.size === 1 ? 'is' : 'are'} typing…</Text>
+          </View>
+        )}
+
         {/* Input bar */}
         <View style={{ backgroundColor:C.surface, padding:10, flexDirection:'row', gap:8, alignItems:'center', borderTopWidth:1, borderTopColor:C.border }}>
           {recording ? (
@@ -253,7 +267,17 @@ export default function ChatScreen({ route, navigation }) {
               <TextInput
                 style={{ flex:1, backgroundColor:C.card, borderRadius:12, paddingHorizontal:14, paddingVertical:10, color:C.text, fontSize:15, borderWidth:1, borderColor:C.border2 }}
                 placeholder={`Message ${title}…`} placeholderTextColor={C.text4}
-                value={input} onChangeText={setInput} multiline
+                value={input}
+                onChangeText={(text) => {
+                  setInput(text);
+                  sendWsFrame({ type:'typing', chatId, chatType, isTyping: true });
+                  clearTimeout(typingTimer.current);
+                  typingTimer.current = setTimeout(
+                    () => sendWsFrame({ type:'typing', chatId, chatType, isTyping: false }),
+                    2000
+                  );
+                }}
+                multiline
                 onFocus={()=>setShowAtt(false)}
               />
               {input.trim()
