@@ -68,6 +68,8 @@ export const getMessages = (type, id, params) =>
   api.get(`/messages/${type}/${id}`, {params});
 export const searchMessages = (q, chatType, chatId) =>
   api.get('/messages/search', { params: { q, chat_type: chatType, chat_id: chatId } });
+export const editMessage = (id, content) => api.put(`/messages/${id}`, { content });
+export const deleteMessage = id => api.delete(`/messages/${id}`);
 export const sendMessage = data => api.post('/messages', data);
 export const uploadFile = formData =>
   api.post('/messages/upload', formData, {

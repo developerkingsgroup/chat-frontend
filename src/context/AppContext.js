@@ -78,6 +78,18 @@ export function AppProvider({ children }) {
       }
     }
 
+    if (event === 'message_updated') {
+      const me = currentUserRef.current?.id;
+      const key = data.chat_type === 'group'
+        ? `group_${data.chat_id}`
+        : `direct_${[data.chat_id, me].sort().join('_')}`;
+      setMessages(prev => {
+        const msgs = prev[key];
+        if (!msgs) return prev;
+        return { ...prev, [key]: msgs.map(m => m.id === data.id ? { ...m, ...data } : m) };
+      });
+    }
+
     if (event === 'message_read') {
       const me = currentUserRef.current?.id;
       const key = data.chatType === 'group'

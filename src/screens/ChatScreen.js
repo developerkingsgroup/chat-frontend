@@ -1,21 +1,21 @@
 // src/screens/ChatScreen.js
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  View, Text, FlatList, TextInput, TouchableOpacity,
+  View, Text, FlatList, TextInput, TouchableOpacity, Pressable,
   KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
 } from 'react-native';
 import AudioRecorderPlayer from 'react-native-audio-recorder-player';
 import { launchImageLibrary } from 'react-native-image-picker';
 import DocumentPicker from 'react-native-document-picker';
 import { useApp } from '../context/AppContext';
-import { getMessages, sendMessage, uploadFile, logCall, searchMessages } from '../utils/api';
+import { getMessages, sendMessage, uploadFile, logCall, searchMessages, editMessage, deleteMessage } from '../utils/api';
 import { C, T, Avatar, Screen } from '../components/UI';
 import moment from 'moment';
 
 const audioPlayer = new AudioRecorderPlayer();
 
 // ── Message Bubble ────────────────────────────────────────────────────────────
-function Bubble({ msg, currentUserId, accent }) {
+function Bubble({ msg, currentUserId, accent, onLongPress }) {
   const own = msg.sender_id === currentUserId;
   const ac  = accent || C.blue;
   const [playing, setPlaying] = useState(false);
@@ -43,7 +43,7 @@ function Bubble({ msg, currentUserId, accent }) {
       {!own && <Avatar emoji={msg.sender_avatar||'👤'} color={ac} size={28} style={{ borderRadius:8 }}/>}
       <View style={{ maxWidth:'73%' }}>
         {!own && <Text style={{ fontSize:11, color:ac, fontWeight:'600', marginBottom:3, paddingLeft:2 }}>{msg.sender_name}</Text>}
-        <View style={{
+        <Pressable onLongPress={onLongPress} delayLongPress={400} style={{
           backgroundColor: own ? C.blue2 : C.card,
           borderRadius:14,
           borderBottomRightRadius: own?3:14,
@@ -52,7 +52,14 @@ function Bubble({ msg, currentUserId, accent }) {
           borderWidth: own?0:1, borderColor:C.border2,
         }}>
           {/* Text */}
-          {msg.type==='text' && <Text style={{ color:own?'#fff':C.text2, fontSize:14, lineHeight:21 }}>{msg.content}</Text>}
+          {msg.type==='text' && (
+            <View>
+              <Text style={{ color:msg.is_deleted?(own?'rgba(255,255,255,.45)':C.text4):(own?'#fff':C.text2), fontSize:14, lineHeight:21, fontStyle:msg.is_deleted?'italic':'normal' }}>
+                {msg.content}
+              </Text>
+              {msg.is_edited && !msg.is_deleted && <Text style={{ fontSize:10, color:own?'rgba(255,255,255,.4)':C.text4, marginTop:1 }}>(edited)</Text>}
+            </View>
+          )}
 
           {/* Voice */}
           {msg.type==='voice' && (
@@ -99,7 +106,7 @@ function Bubble({ msg, currentUserId, accent }) {
           <Text style={{ fontSize:10, color:own?'rgba(255,255,255,.45)':C.text4, textAlign:'right', marginTop:5 }}>
             {moment(msg.created_at).format('h:mm A')}{own ? (msg.is_read ? ' ✓✓' : ' ✓') : ''}
           </Text>
-        </View>
+        </Pressable>
       </View>
     </View>
   );
@@ -118,6 +125,7 @@ export default function ChatScreen({ route, navigation }) {
   const [searchMode,  setSearchMode]  = useState(false);
   const [searchQ,     setSearchQ]     = useState('');
   const [searchRes,   setSearchRes]   = useState([]);
+  const [editingId,   setEditingId]   = useState(null);
 
   const flatRef     = useRef(null);
   const recTimer    = useRef(null);
@@ -177,11 +185,25 @@ export default function ChatScreen({ route, navigation }) {
     if (!input.trim()) return;
     const text = input.trim(); setInput('');
     try {
-      const r = await sendMessage({ chat_id:chatId, chat_type:chatType, type:'text', content:text });
-      pushMessage(chatType, chatId, r.data);
+      if (editingId) {
+        await editMessage(editingId, text);
+        setEditingId(null);
+      } else {
+        const r = await sendMessage({ chat_id:chatId, chat_type:chatType, type:'text', content:text });
+        pushMessage(chatType, chatId, r.data);
+      }
     } catch (err) {
       Alert.alert('Error', 'Could not send message');
     }
+  };
+
+  const onLongPressBubble = (msg) => {
+    if (msg.sender_id !== currentUser?.id) return;
+    Alert.alert('Message', msg.content?.slice(0,60), [
+      { text: 'Edit', onPress: () => { setInput(msg.content); setEditingId(msg.id); } },
+      { text: 'Delete', style:'destructive', onPress: () => deleteMessage(msg.id).catch(()=>{}) },
+      { text: 'Cancel', style:'cancel' },
+    ]);
   };
 
   const startRec = async () => {
@@ -273,7 +295,7 @@ export default function ChatScreen({ route, navigation }) {
               data={msgs}
               keyExtractor={m=>m.id}
               onContentSizeChange={()=>flatRef.current?.scrollToEnd({animated:false})}
-              renderItem={({item})=><Bubble msg={item} currentUserId={currentUser?.id} accent={ac}/>}
+              renderItem={({item})=><Bubble msg={item} currentUserId={currentUser?.id} accent={ac} onLongPress={()=>onLongPressBubble(item)}/>}
               contentContainerStyle={{ paddingVertical:10 }}
               ListEmptyComponent={<View style={{alignItems:'center',paddingTop:60}}><Text style={{fontSize:36}}>💬</Text><Text style={[T.sm,{marginTop:8}]}>No messages yet s</Text></View>}
             />
@@ -295,6 +317,16 @@ export default function ChatScreen({ route, navigation }) {
                 <Text style={T.xs}>{a.label}</Text>
               </TouchableOpacity>
             ))}
+          </View>
+        )}
+
+        {/* Edit mode banner */}
+        {editingId && (
+          <View style={{ paddingHorizontal:16, paddingVertical:6, backgroundColor:C.blue2+'22', borderTopWidth:1, borderTopColor:C.blue2, flexDirection:'row', alignItems:'center', justifyContent:'space-between' }}>
+            <Text style={{ fontSize:12, color:C.blue, fontWeight:'600' }}>✏ Editing message</Text>
+            <TouchableOpacity onPress={()=>{setEditingId(null);setInput('');}}>
+              <Text style={{ fontSize:12, color:C.text4 }}>Cancel</Text>
+            </TouchableOpacity>
           </View>
         )}
 
