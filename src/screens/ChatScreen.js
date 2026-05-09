@@ -76,7 +76,7 @@ function Bubble({ msg, currentUserId, accent }) {
           )}
 
           <Text style={{ fontSize:10, color:own?'rgba(255,255,255,.45)':C.text4, textAlign:'right', marginTop:5 }}>
-            {moment(msg.created_at).format('h:mm A')}{own?' ✓✓':''}
+            {moment(msg.created_at).format('h:mm A')}{own ? (msg.is_read ? ' ✓✓' : ' ✓') : ''}
           </Text>
         </View>
       </View>

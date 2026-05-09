@@ -18,6 +18,10 @@ export function AppProvider({ children }) {
   const [loading,       setLoading]       = useState(true);
   const [onlineUsers,   setOnlineUsers]   = useState(new Set());
   const wsRef = useRef(null);
+  const currentUserRef = useRef(null);
+
+  // Keep currentUserRef in sync so WS handlers always see the current user
+  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
 
   // ── Bootstrap ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -71,6 +75,18 @@ export function AppProvider({ children }) {
           return matches ? { ...c, unread: (c.unread||0)+1, last_message: data } : c;
         }));
       }
+    }
+
+    if (event === 'message_read') {
+      const me = currentUserRef.current?.id;
+      const key = data.chatType === 'group'
+        ? `group_${data.chatId}`
+        : `direct_${[data.chatId, me].sort().join('_')}`;
+      setMessages(prev => {
+        const msgs = prev[key];
+        if (!msgs) return prev;
+        return { ...prev, [key]: msgs.map(m => m.sender_id === me ? { ...m, is_read: true } : m) };
+      });
     }
 
     if (event === 'user_presence') {
