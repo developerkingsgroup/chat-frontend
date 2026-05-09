@@ -17,8 +17,9 @@ import ChatListScreen                  from './src/screens/ChatListScreen';
 import ChatScreen                      from './src/screens/ChatScreen';
 import GroupsScreen                    from './src/screens/GroupsScreen';
 import RemindersScreen                 from './src/screens/RemindersScreen';
-import { CallsScreen, CallScreen, SettingsScreen } from './src/screens/OtherScreens';
+import { CallsScreen, CallScreen } from './src/screens/OtherScreens';
 import { ManageUserScreen, ManageCompanyScreen, ManageBranchScreen, ManageDeptScreen } from './src/screens/ManageScreens';
+import MyRemindersScreen from './src/screens/MyRemindersScreen';
 
 const Stack = createStackNavigator();
 const Tab   = createBottomTabNavigator();
@@ -206,8 +207,6 @@ function MainTabs() {
         options={{ title: 'Calls', tabBarLabel: 'Calls', tabBarIcon: ({ color, focused }) => <TabIcon icon="📞" color={color} focused={focused} /> }} />
       <Tab.Screen name="Reminders" component={RemindersScreen}
         options={{ title: 'Reminders', tabBarLabel: 'Remind', tabBarIcon: ({ color, focused }) => <TabIcon icon="🔔" color={color} focused={focused} /> }} />
-      <Tab.Screen name="Settings" component={SettingsScreen}
-        options={{ title: 'Settings', tabBarLabel: 'Settings', tabBarIcon: ({ color, focused }) => <TabIcon icon="⚙️" color={color} focused={focused} /> }} />
     </Tab.Navigator>
   );
 }
@@ -245,6 +244,7 @@ function Root() {
             <Stack.Screen name="ManageCompany" component={ManageCompanyScreen} options={{ title: 'Manage Company' }} />
             <Stack.Screen name="ManageBranch" component={ManageBranchScreen} options={{ title: 'Manage Branch' }} />
             <Stack.Screen name="ManageDept" component={ManageDeptScreen} options={{ title: 'Manage Department' }} />
+            <Stack.Screen name="MyReminders" component={MyRemindersScreen} options={{ title: 'My Reminders' }} />
           </>
         )}
       </Stack.Navigator>
