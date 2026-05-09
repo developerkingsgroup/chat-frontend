@@ -7,14 +7,14 @@ import { getConversations } from '../utils/api';
 import { C, T, Avatar, Badge, Screen, SectionLabel, Empty } from '../components/UI';
 import moment from 'moment';
 
-function ConvoRow({ item, onPress }) {
+function ConvoRow({ item, onPress, isOnline }) {
   const { user, last_message, unread } = item;
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.78}
       style={{ flexDirection:'row', alignItems:'center', gap:12, paddingHorizontal:14, paddingVertical:12, borderBottomWidth:1, borderBottomColor:C.border }}>
       <View style={{ position:'relative' }}>
         <Avatar emoji={user.avatar||'👤'} color={user.color||C.blue} size={46}/>
-        <View style={{ position:'absolute', bottom:0, right:0, width:10, height:10, borderRadius:5, backgroundColor:C.green, borderWidth:2, borderColor:C.bg }}/>
+        {isOnline && <View style={{ position:'absolute', bottom:0, right:0, width:10, height:10, borderRadius:5, backgroundColor:C.green, borderWidth:2, borderColor:C.bg }}/>}
       </View>
       <View style={{ flex:1, minWidth:0 }}>
         <View style={{ flexDirection:'row', alignItems:'center', justifyContent:'space-between', gap:6 }}>
@@ -34,7 +34,7 @@ function ConvoRow({ item, onPress }) {
 }
 
 export default function ChatListScreen({ navigation }) {
-  const { conversations, setConversations, users, currentUser } = useApp();
+  const { conversations, setConversations, users, currentUser, onlineUsers } = useApp();
   const [refreshing, setRefreshing] = useState(false);
 
   const load = async () => {
@@ -61,7 +61,7 @@ export default function ChatListScreen({ navigation }) {
         ListEmptyComponent={<Empty icon='💬' text='No conversations yet'/>}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.blue}/>}
         renderItem={({ item }) => (
-          <ConvoRow item={item} onPress={() => openChat(item.user)}/>
+          <ConvoRow item={item} onPress={() => openChat(item.user)} isOnline={onlineUsers.has(item.user?.id)}/>
         )}
         ListFooterComponent={() => others.length>0 ? (
           <View>
@@ -69,7 +69,10 @@ export default function ChatListScreen({ navigation }) {
             {others.map(u => (
               <TouchableOpacity key={u.id} onPress={() => openChat(u)} activeOpacity={0.78}
                 style={{ flexDirection:'row', alignItems:'center', gap:12, paddingHorizontal:14, paddingVertical:11, borderBottomWidth:1, borderBottomColor:C.border }}>
-                <Avatar emoji={u.avatar||'👤'} color={u.color||C.blue} size={44}/>
+                <View style={{ position:'relative' }}>
+                  <Avatar emoji={u.avatar||'👤'} color={u.color||C.blue} size={44}/>
+                  {onlineUsers.has(u.id) && <View style={{ position:'absolute', bottom:0, right:0, width:10, height:10, borderRadius:5, backgroundColor:C.green, borderWidth:2, borderColor:C.bg }}/>}
+                </View>
                 <View style={{ flex:1 }}>
                   <Text style={T.h3}>{u.name}</Text>
                   <Text style={[T.sm, { color:u.color||C.text3, marginTop:1 }]}>{u.role||'User'}</Text>

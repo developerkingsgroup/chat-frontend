@@ -16,6 +16,7 @@ export function AppProvider({ children }) {
   const [conversations, setConversations] = useState([]);
   const [messages,      setMessages]      = useState({}); // { `${type}_${id}`: [] }
   const [loading,       setLoading]       = useState(true);
+  const [onlineUsers,   setOnlineUsers]   = useState(new Set());
   const wsRef = useRef(null);
 
   // ── Bootstrap ───────────────────────────────────────────────────────────────
@@ -72,8 +73,20 @@ export function AppProvider({ children }) {
       }
     }
 
+    if (event === 'user_presence') {
+      setOnlineUsers(prev => {
+        const next = new Set(prev);
+        if (data.status === 'online') next.add(data.userId);
+        else next.delete(data.userId);
+        return next;
+      });
+    }
+
+    if (event === 'online_users_snapshot') {
+      setOnlineUsers(new Set(data.userIds));
+    }
+
     if (event === 'reminder_created' || event === 'reminder_updated') {
-      // Signal listeners via a simple state bump
       setReminderSignal(s => s + 1);
     }
   }, []);
@@ -124,7 +137,7 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       token, currentUser, isAdmin, users, companies, departments,
       chatGroups, conversations, messages, loading, reminderSignal,
-      chatUnread, groupUnread, getKey,
+      onlineUsers, chatUnread, groupUnread, getKey,
       signIn, signOut, loadAll,
       loadMessages, pushMessage, clearUnread,
       setUsers, setCompanies, setChatGroups, setConversations,
