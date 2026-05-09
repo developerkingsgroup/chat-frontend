@@ -91,6 +91,10 @@ export const setReminderStatus = (id, status) =>
   api.patch(`/reminders/${id}/status`, {status});
 export const deleteReminder = id => api.delete(`/reminders/${id}`);
 
+// Chat group permissions
+export const setGroupPermission = (id, permission) =>
+  api.patch(`/chat-groups/${id}/permission`, { send_permission: permission });
+
 // Stats
 export const getStats = () => api.get('/stats');
 

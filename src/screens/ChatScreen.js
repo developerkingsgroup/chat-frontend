@@ -115,7 +115,7 @@ function Bubble({ msg, currentUserId, accent, onLongPress }) {
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function ChatScreen({ route, navigation }) {
   const { chatType, chatId, title, subtitle, avatar, color } = route.params;
-  const { currentUser, messages:allMsgs, loadMessages, pushMessage, clearUnread, sendWsFrame, typingMap, users } = useApp();
+  const { currentUser, messages:allMsgs, loadMessages, pushMessage, clearUnread, sendWsFrame, typingMap, users, chatGroups, isAdmin } = useApp();
 
   const [input,       setInput]       = useState('');
   const [recording,   setRecording]   = useState(false);
@@ -134,6 +134,12 @@ export default function ChatScreen({ route, navigation }) {
 
   const chatKey = key;
   const typingUsers = typingMap[chatKey] || new Set();
+
+  // Scope-based permission check
+  const groupInfo = chatType === 'group' ? chatGroups.find(g => g.id === chatId) : null;
+  const managersOnly = groupInfo?.send_permission === 'managers_only';
+  const userRole = currentUser?.role?.toLowerCase();
+  const canSend = !managersOnly || isAdmin || userRole === 'manager' || userRole === 'admin';
   const typingNames = [...typingUsers]
     .map(uid => users.find(u => u.id === uid)?.name || 'Someone')
     .join(', ');
@@ -338,7 +344,12 @@ export default function ChatScreen({ route, navigation }) {
         )}
 
         {/* Input bar */}
-        <View style={{ backgroundColor:C.surface, padding:10, flexDirection:'row', gap:8, alignItems:'center', borderTopWidth:1, borderTopColor:C.border }}>
+        {!canSend ? (
+          <View style={{ backgroundColor:C.surface, padding:14, borderTopWidth:1, borderTopColor:C.border, alignItems:'center' }}>
+            <Text style={{ color:C.text4, fontSize:13 }}>🔒 Only managers can send messages in this group</Text>
+          </View>
+        ) : null}
+        <View style={{ backgroundColor:C.surface, padding:10, flexDirection:'row', gap:8, alignItems:'center', borderTopWidth:1, borderTopColor:C.border, display: canSend ? 'flex' : 'none' }}>
           {recording ? (
             <>
               <TouchableOpacity onPress={()=>{clearInterval(recTimer.current);setRecording(false);setRecSecs(0);}}
