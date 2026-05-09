@@ -19,6 +19,7 @@ import GroupsScreen                    from './src/screens/GroupsScreen';
 import RemindersScreen                 from './src/screens/RemindersScreen';
 import { CallsScreen, CallScreen } from './src/screens/OtherScreens';
 import { ManageUserScreen, ManageCompanyScreen, ManageBranchScreen, ManageDeptScreen } from './src/screens/ManageScreens';
+import MyRemindersScreen from './src/screens/MyRemindersScreen';
 
 const Stack = createStackNavigator();
 const Tab   = createBottomTabNavigator();
@@ -243,6 +244,7 @@ function Root() {
             <Stack.Screen name="ManageCompany" component={ManageCompanyScreen} options={{ title: 'Manage Company' }} />
             <Stack.Screen name="ManageBranch" component={ManageBranchScreen} options={{ title: 'Manage Branch' }} />
             <Stack.Screen name="ManageDept" component={ManageDeptScreen} options={{ title: 'Manage Department' }} />
+            <Stack.Screen name="MyReminders" component={MyRemindersScreen} options={{ title: 'My Reminders' }} />
           </>
         )}
       </Stack.Navigator>

@@ -89,7 +89,6 @@ function RCard({r, onPress}) {
 function ReviewCard({r, currentUser, users, onPress, onApprove, onReject, onReassign}) {
   const [showReject,   setShowReject]   = useState(false);
   const [rejectReason, setRejectReason] = useState('');
-  const [showReassign, setShowReassign] = useState(false);
   const forUser = resolveUser(r.for_user_id, users);
 
   return (
@@ -118,12 +117,12 @@ function ReviewCard({r, currentUser, users, onPress, onApprove, onReject, onReas
 
       <View style={{flexDirection: 'row', gap: 8, paddingHorizontal: 50, paddingBottom: 10}}>
         <TouchableOpacity
-          onPress={() => { setShowReject(v => !v); setShowReassign(false); setRejectReason(''); }}
+          onPress={() => { setShowReject(v => !v); setRejectReason(''); }}
           style={{paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#EF444466', backgroundColor: '#EF444411'}}>
           <Text style={{fontSize: 11, fontWeight: '700', color: '#EF4444'}}>Reject</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => { setShowReassign(v => !v); setShowReject(false); }}
+          onPress={() => onReassign(r.id)}
           style={{paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: C.blue + '66', backgroundColor: C.blue + '11'}}>
           <Text style={{fontSize: 11, fontWeight: '700', color: C.blue}}>Reassign</Text>
         </TouchableOpacity>
@@ -145,41 +144,33 @@ function ReviewCard({r, currentUser, users, onPress, onApprove, onReject, onReas
           </TouchableOpacity>
         </View>
       )}
-
-      {showReassign && (
-        <View style={{paddingHorizontal: 16, paddingBottom: 12}}>
-          <Text style={{fontSize: 11, color: C.text4, marginBottom: 6, fontWeight: '600'}}>REASSIGN TO</Text>
-          <ScrollView nestedScrollEnabled style={{maxHeight: 180}}>
-            {users.filter(u => u.id !== getRefId(r.for_user_id)).map(u => (
-              <TouchableOpacity key={u.id}
-                onPress={() => { onReassign(r.id, u.id); setShowReassign(false); }}
-                style={{flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8, borderRadius: 8, marginBottom: 4, backgroundColor: C.card}}>
-                <Text style={{fontSize: 16}}>{u.avatar || '👤'}</Text>
-                <View style={{flex: 1}}>
-                  <Text style={{fontSize: 13, color: C.text, fontWeight: '600'}}>{u.name}</Text>
-                  <Text style={{fontSize: 11, color: C.text3}}>{u.role || 'User'}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      )}
     </View>
   );
 }
 
 // ── Quick Detail Sheet (bottom sheet, replaces full-page modal) ───────────────
 function QuickDetailSheet({r, users, currentUser, onClose, onAction, onSave}) {
-  const [editTitle, setEditTitle] = useState('');
-  const [editNote,  setEditNote]  = useState('');
-  const [dirty,     setDirty]     = useState(false);
-  const [saving,    setSaving]    = useState(false);
+  const [editTitle,        setEditTitle]        = useState('');
+  const [editNote,         setEditNote]         = useState('');
+  const [dirty,            setDirty]            = useState(false);
+  const [saving,           setSaving]           = useState(false);
+  const [showRejectInput,  setShowRejectInput]  = useState(false);
+  const [rejectReason,     setRejectReason]     = useState('');
+  const [showReassignEdit, setShowReassignEdit] = useState(false);
+  const [reassignTitle,    setReassignTitle]    = useState('');
+  const [reassignNote,     setReassignNote]     = useState('');
+  const [reassigning,      setReassigning]      = useState(false);
 
   useEffect(() => {
     if (r) {
       setEditTitle(r.title || '');
       setEditNote(r.note || '');
       setDirty(false);
+      setShowRejectInput(false);
+      setRejectReason('');
+      setShowReassignEdit(false);
+      setReassignTitle('');
+      setReassignNote('');
     }
   }, [r?.id]);
 
@@ -209,6 +200,18 @@ function QuickDetailSheet({r, users, currentUser, onClose, onAction, onSave}) {
       onSave?.();
     } catch { Alert.alert('Error', 'Could not save'); }
     finally { setSaving(false); }
+  };
+
+  const saveAndReactivate = async () => {
+    if (!reassignTitle.trim()) { Alert.alert('Error', 'Title cannot be empty'); return; }
+    setReassigning(true);
+    try {
+      await updateReminder(r.id, {title: reassignTitle.trim(), note: reassignNote});
+      await setReminderStatus(r.id, 'pending');
+      onSave?.();
+      onClose();
+    } catch { Alert.alert('Error', 'Could not reactivate'); }
+    finally { setReassigning(false); }
   };
 
   return (
@@ -298,6 +301,15 @@ function QuickDetailSheet({r, users, currentUser, onClose, onAction, onSave}) {
                   </View>
                 </View>
               )}
+              {isAssignee && r.status === 'rejected' && !!r.rejection_reason && (
+                <View style={{flexDirection: 'row', alignItems: 'flex-start', gap: 10}}>
+                  <Text style={{fontSize: 16, width: 22, textAlign: 'center'}}>❌</Text>
+                  <View style={{flex: 1}}>
+                    <Text style={{fontSize: 10, color: '#EF4444', textTransform: 'uppercase', letterSpacing: 0.4}}>Rejection Reason</Text>
+                    <Text style={{fontSize: 13, color: C.text, marginTop: 2}}>{r.rejection_reason}</Text>
+                  </View>
+                </View>
+              )}
             </View>
 
             {/* Save */}
@@ -320,29 +332,79 @@ function QuickDetailSheet({r, users, currentUser, onClose, onAction, onSave}) {
                   <Text style={{color: '#FBBF24', fontWeight: '700'}}>✓  Mark as Done</Text>
                 </TouchableOpacity>
               )}
-              {iCanReview && (
-                <View style={{flexDirection: 'row', gap: 8}}>
-                  <TouchableOpacity onPress={() => { onAction(r.id, 'approved'); onClose(); }} style={{
-                    flex: 1, backgroundColor: '#065F4622', borderWidth: 1, borderColor: '#065F4666',
-                    borderRadius: 10, padding: 13, alignItems: 'center',
-                  }}>
-                    <Text style={{color: '#34D399', fontWeight: '700'}}>Approve</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => { onAction(r.id, 'rejected'); onClose(); }} style={{
-                    flex: 1, backgroundColor: '#7F1D1D22', borderWidth: 1, borderColor: '#7F1D1D66',
-                    borderRadius: 10, padding: 13, alignItems: 'center',
-                  }}>
-                    <Text style={{color: '#FCA5A5', fontWeight: '700'}}>Reject</Text>
-                  </TouchableOpacity>
+              {iCanReview && !showReassignEdit && (
+                <View style={{gap: 8}}>
+                  {!showRejectInput ? (
+                    <>
+                      <View style={{flexDirection: 'row', gap: 8}}>
+                        <TouchableOpacity onPress={() => { onAction(r.id, 'approved'); onClose(); }} style={{
+                          flex: 1, backgroundColor: '#065F4622', borderWidth: 1, borderColor: '#065F4666',
+                          borderRadius: 10, padding: 13, alignItems: 'center',
+                        }}>
+                          <Text style={{color: '#34D399', fontWeight: '700'}}>Approve</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => setShowRejectInput(true)} style={{
+                          flex: 1, backgroundColor: '#7F1D1D22', borderWidth: 1, borderColor: '#7F1D1D66',
+                          borderRadius: 10, padding: 13, alignItems: 'center',
+                        }}>
+                          <Text style={{color: '#FCA5A5', fontWeight: '700'}}>Reject</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => { setReassignTitle(r.title || ''); setReassignNote(r.note || ''); setShowReassignEdit(true); }}
+                        style={{backgroundColor: C.card, borderWidth: 1, borderColor: C.blue + '55', borderRadius: 10, padding: 13, alignItems: 'center'}}>
+                        <Text style={{color: C.blue, fontWeight: '600'}}>↩  Reassign (Reactivate)</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <View style={{gap: 8}}>
+                      <TextInput
+                        value={rejectReason}
+                        onChangeText={setRejectReason}
+                        placeholder="Reason for rejection..."
+                        placeholderTextColor={C.text4}
+                        style={{backgroundColor: C.card, borderRadius: 10, padding: 12, color: C.text, borderWidth: 1, borderColor: '#EF444466', fontSize: 13}}
+                      />
+                      <TouchableOpacity
+                        onPress={() => { onAction(r.id, 'rejected', rejectReason); setShowRejectInput(false); onClose(); }}
+                        style={{backgroundColor: '#7F1D1D33', borderWidth: 1, borderColor: '#EF444466', borderRadius: 10, padding: 12, alignItems: 'center'}}>
+                        <Text style={{color: '#EF4444', fontWeight: '700'}}>Confirm Reject</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => setShowRejectInput(false)} style={{alignItems: 'center', padding: 10}}>
+                        <Text style={{color: C.text4, fontSize: 13}}>Cancel</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
               )}
-              {isAssignee && r.status === 'rejected' && (
-                <TouchableOpacity onPress={() => { onAction(r.id, 'pending'); onClose(); }} style={{
-                  backgroundColor: C.card, borderWidth: 1, borderColor: C.border,
-                  borderRadius: 10, padding: 13, alignItems: 'center',
-                }}>
-                  <Text style={{color: C.text, fontWeight: '600'}}>↩  Revise & Resubmit</Text>
-                </TouchableOpacity>
+              {iCanReview && showReassignEdit && (
+                <View style={{gap: 8}}>
+                  <Text style={{fontSize: 10, color: C.text4, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5}}>Edit Before Reactivating</Text>
+                  <TextInput
+                    value={reassignTitle}
+                    onChangeText={setReassignTitle}
+                    placeholder="Task title..."
+                    placeholderTextColor={C.text4}
+                    style={{fontSize: 15, fontWeight: '600', color: C.text, backgroundColor: C.card, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: C.purple + '66'}}
+                  />
+                  <TextInput
+                    value={reassignNote}
+                    onChangeText={setReassignNote}
+                    placeholder="Add instructions or notes..."
+                    placeholderTextColor={C.text4}
+                    multiline
+                    style={{backgroundColor: C.card, borderRadius: 10, padding: 12, color: C.text, minHeight: 72, fontSize: 13, borderWidth: 1, borderColor: C.border}}
+                  />
+                  <TouchableOpacity onPress={saveAndReactivate} disabled={reassigning} style={{
+                    backgroundColor: C.blue + '22', borderWidth: 1, borderColor: C.blue + '66',
+                    borderRadius: 10, padding: 13, alignItems: 'center', opacity: reassigning ? 0.6 : 1,
+                  }}>
+                    <Text style={{color: C.blue, fontWeight: '700'}}>{reassigning ? 'Reactivating…' : '↩  Save & Reactivate'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setShowReassignEdit(false)} style={{alignItems: 'center', padding: 10}}>
+                    <Text style={{color: C.text4, fontSize: 13}}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
 
@@ -681,18 +743,7 @@ export default function RemindersScreen({navigation}) {
   const [expandedUsers, setExpandedUsers] = useState({});
 
   useEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <TouchableOpacity
-          onPress={() => setShowCreate(true)}
-          style={{
-            marginRight: 14, width: 34, height: 34, borderRadius: 17,
-            backgroundColor: '#6D28D922', alignItems: 'center', justifyContent: 'center',
-          }}>
-          <Text style={{fontSize: 22, color: '#A78BFA', lineHeight: 28}}>+</Text>
-        </TouchableOpacity>
-      ),
-    });
+    navigation.setOptions({ title: '', headerShown: false });
   }, [navigation]);
 
   const load = async () => {
@@ -704,18 +755,18 @@ export default function RemindersScreen({navigation}) {
 
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
-  const handleAction = async (id, status) => {
-    try { await setReminderStatus(id, status); load(); }
+  const handleAction = async (id, status, rejection_reason) => {
+    try { await setReminderStatus(id, status, rejection_reason); load(); }
     catch { Alert.alert('Error', 'Could not update'); }
   };
 
-  const handleReject = async (id, _reason) => {
-    try { await setReminderStatus(id, 'rejected'); load(); }
+  const handleReject = async (id, reason) => {
+    try { await setReminderStatus(id, 'rejected', reason); load(); }
     catch { Alert.alert('Error', 'Could not reject'); }
   };
 
-  const handleReassign = async (id, newUserId) => {
-    try { await updateReminder(id, {for_user_id: newUserId, status: 'pending'}); load(); }
+  const handleReassign = async (id) => {
+    try { await setReminderStatus(id, 'pending'); load(); }
     catch { Alert.alert('Error', 'Could not reassign'); }
   };
 
@@ -737,21 +788,28 @@ export default function RemindersScreen({navigation}) {
 
   return (
     <Screen>
-      {/* View chips */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{paddingHorizontal: 12, paddingVertical: 10, gap: 7}}>
+      {/* Tab row + create button */}
+      <View style={{flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 8, gap: 5, borderBottomWidth: 1, borderBottomColor: C.border}}>
         {VIEWS.map(([v, l]) => (
           <TouchableOpacity key={v} onPress={() => setView(v)} activeOpacity={0.85} style={{
-            paddingHorizontal: 13, paddingVertical: 6, borderRadius: 999, borderWidth: 1,
+            flex: 1, paddingVertical: 6, borderRadius: 8, borderWidth: 1,
             borderColor: v === 'review' && reviewCount > 0 ? '#F59E0B44' : view === v ? '#8B5CF644' : C.border,
             backgroundColor: view === v ? '#8B5CF622' : C.card,
+            alignItems: 'center',
           }}>
-            <Text style={{fontSize: 12, fontWeight: '700', color: view === v ? '#A78BFA' : C.text3}}>
+            <Text style={{fontSize: 11, fontWeight: '700', color: view === v ? '#A78BFA' : C.text3}} numberOfLines={1}>
               {l}{v === 'review' && reviewCount > 0 ? ` (${reviewCount})` : ''}
             </Text>
           </TouchableOpacity>
         ))}
-      </ScrollView>
+        <TouchableOpacity onPress={() => setShowCreate(true)} style={{
+          width: 34, height: 34, borderRadius: 9,
+          backgroundColor: '#6D28D922', alignItems: 'center', justifyContent: 'center',
+          borderWidth: 1, borderColor: '#6D28D933',
+        }}>
+          <Text style={{fontSize: 20, color: '#A78BFA', lineHeight: 24}}>+</Text>
+        </TouchableOpacity>
+      </View>
 
       <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.purple} />}>
 
@@ -775,7 +833,7 @@ export default function RemindersScreen({navigation}) {
         {/* ── Others ── */}
         {view === 'others' && (
           <GroupedUserView
-            reminders={reminders} users={users} currentUser={currentUser}
+            reminders={reminders.filter(r => r.status !== 'review')} users={users} currentUser={currentUser}
             expandedUsers={expandedUsers} setExpandedUsers={setExpandedUsers}
             onOpenDetail={setDetailRem}
           />
@@ -806,7 +864,7 @@ export default function RemindersScreen({navigation}) {
         {/* ── All ── */}
         {view === 'all' && (
           <GroupedUserView
-            reminders={reminders} users={users} currentUser={currentUser}
+            reminders={reminders.filter(r => r.status !== 'review')} users={users} currentUser={currentUser}
             expandedUsers={expandedUsers} setExpandedUsers={setExpandedUsers}
             onOpenDetail={setDetailRem}
           />

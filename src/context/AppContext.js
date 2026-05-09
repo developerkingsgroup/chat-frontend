@@ -137,10 +137,13 @@ export function AppProvider({ children }) {
 
     if (event === 'reminder_created' || event === 'reminder_updated') {
       setReminderSignal(s => s + 1);
+      setReminderUnread(n => n + 1);
     }
   }, []);
 
   const [reminderSignal, setReminderSignal] = useState(0);
+  const [reminderUnread, setReminderUnread] = useState(0);
+  const clearReminderUnread = useCallback(() => setReminderUnread(0), []);
 
   // ── Auth ────────────────────────────────────────────────────────────────────
   const signIn = async (tok, user) => {
@@ -200,7 +203,7 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       token, currentUser, isAdmin, users, companies, departments,
-      chatGroups, conversations, messages, loading, reminderSignal,
+      chatGroups, conversations, messages, loading, reminderSignal, reminderUnread, clearReminderUnread,
       onlineUsers, typingMap, chatUnread, groupUnread, getKey,
       signIn, signOut, loadAll, sendWsFrame,
       loadMessages, pushMessage, updateMessage, clearUnread,

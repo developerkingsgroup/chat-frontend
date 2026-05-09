@@ -74,36 +74,65 @@ function CompanyHeader({ company, isPinned, onLongPress }) {
 
 // ── Menu modal ────────────────────────────────────────────────────────────────
 function MenuModal({ visible, onClose, navigation }) {
+  const { signOut, currentUser } = useApp();
   const navigate = (route) => { onClose(); navigation.navigate(route); };
+
+  const handleLogout = () => {
+    onClose();
+    Alert.alert('Logout', 'Are you sure you want to logout?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Logout', style: 'destructive', onPress: signOut },
+    ]);
+  };
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={{ flex: 1, flexDirection: 'row' }}>
-        <View style={{ width: '72%', backgroundColor: C.bg, paddingTop: 60, paddingHorizontal: 20, borderRightWidth: 1, borderRightColor: C.border }}>
-          <Text style={[T.h2, { marginBottom: 24 }]}>Menu</Text>
+        <View style={{ width: '72%', backgroundColor: C.bg, paddingTop: 60, paddingHorizontal: 20, borderRightWidth: 1, borderRightColor: C.border, justifyContent: 'space-between' }}>
+          <View>
+            {/* User info */}
+            {currentUser && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 28, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: C.border }}>
+                <View style={{ width: 42, height: 42, borderRadius: 11, backgroundColor: (currentUser.color || C.blue) + '22', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 22 }}>{currentUser.avatar || '👤'}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: C.text }} numberOfLines={1}>{currentUser.name}</Text>
+                  <Text style={{ fontSize: 11, color: C.text3, marginTop: 1 }} numberOfLines={1}>{currentUser.role || 'User'}</Text>
+                </View>
+              </View>
+            )}
 
-          <Text style={{ fontSize: 10, fontWeight: '700', color: C.text4, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>
-            Manage
-          </Text>
-          {[
-            ['👤  Create User',       'ManageUser'],
-            ['🏢  Create Company',    'ManageCompany'],
-            ['🌿  Create Branch',     'ManageBranch'],
-            ['🏷️  Create Department', 'ManageDept'],
-          ].map(([label, route]) => (
-            <TouchableOpacity key={route} onPress={() => navigate(route)}
+            <Text style={{ fontSize: 10, fontWeight: '700', color: C.text4, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>
+              Manage
+            </Text>
+            {[
+              ['👤  Create User',       'ManageUser'],
+              ['🏢  Create Company',    'ManageCompany'],
+              ['🌿  Create Branch',     'ManageBranch'],
+              ['🏷️  Create Department', 'ManageDept'],
+            ].map(([label, route]) => (
+              <TouchableOpacity key={route} onPress={() => navigate(route)}
+                style={{ paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: C.border }}>
+                <Text style={{ color: C.text, fontSize: 15 }}>{label}</Text>
+              </TouchableOpacity>
+            ))}
+
+            <Text style={{ fontSize: 10, fontWeight: '700', color: C.text4, textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 22, marginBottom: 8 }}>
+              Attendance
+            </Text>
+            <TouchableOpacity
+              onPress={() => { onClose(); Alert.alert('Coming Soon', 'Attendance feature coming soon'); }}
               style={{ paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: C.border }}>
-              <Text style={{ color: C.text, fontSize: 15 }}>{label}</Text>
+              <Text style={{ color: C.text, fontSize: 15 }}>📅  Upcoming</Text>
             </TouchableOpacity>
-          ))}
+          </View>
 
-          <Text style={{ fontSize: 10, fontWeight: '700', color: C.text4, textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 22, marginBottom: 8 }}>
-            Attendance
-          </Text>
-          <TouchableOpacity
-            onPress={() => { onClose(); Alert.alert('Coming Soon', 'Attendance feature coming soon'); }}
-            style={{ paddingVertical: 13 }}>
-            <Text style={{ color: C.text, fontSize: 15 }}>📅  Upcoming</Text>
+          {/* Logout at bottom */}
+          <TouchableOpacity onPress={handleLogout}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 18, borderTopWidth: 1, borderTopColor: C.border }}>
+            <Text style={{ fontSize: 18 }}>🚪</Text>
+            <Text style={{ fontSize: 15, color: '#EF4444', fontWeight: '600' }}>Logout</Text>
           </TouchableOpacity>
         </View>
         <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)' }} onPress={onClose} activeOpacity={1} />
@@ -114,7 +143,7 @@ function MenuModal({ visible, onClose, navigation }) {
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 export default function ChatListScreen({ navigation }) {
-  const { conversations, setConversations, users, currentUser, onlineUsers, companies } = useApp();
+  const { conversations, setConversations, users, currentUser, onlineUsers, companies, reminderUnread } = useApp();
   const [refreshing,    setRefreshing]    = useState(false);
   const [searchText,    setSearchText]    = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
@@ -185,7 +214,9 @@ export default function ChatListScreen({ navigation }) {
     const usedIds = new Set();
 
     sortedCos.forEach(co => {
-      const coUsers = allOtherUsers.filter(u => u.company_id === co.id);
+      const coUsers = allOtherUsers.filter(u =>
+        u.company_id === co.id && conversations.find(c => c.user?.id === u.id)
+      );
       if (coUsers.length === 0) return;
 
       // Sort users: pinned first, then by latest DM message
@@ -204,8 +235,10 @@ export default function ChatListScreen({ navigation }) {
       coUsers.forEach(u => { items.push({ type: 'user', data: u, key: `usr_${u.id}` }); usedIds.add(u.id); });
     });
 
-    // Users with no company
-    const orphans = allOtherUsers.filter(u => !usedIds.has(u.id));
+    // Users with no company but with an existing conversation
+    const orphans = allOtherUsers.filter(u =>
+      !usedIds.has(u.id) && conversations.find(c => c.user?.id === u.id)
+    );
     if (orphans.length > 0) {
       orphans.sort((a, b) => {
         const aP = pinnedUsrs.has(a.id), bP = pinnedUsrs.has(b.id);
@@ -333,6 +366,21 @@ export default function ChatListScreen({ navigation }) {
           keyExtractor={i => i.key}
           renderItem={renderItem}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.blue} />}
+          ListHeaderComponent={
+            <TouchableOpacity
+              onPress={() => navigation.navigate('MyReminders')}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.border, backgroundColor: C.card }}>
+              <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: '#6D28D922', alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 22 }}>🔔</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={T.h3}>My Reminders</Text>
+                <Text style={[T.sm, { color: C.text4 }]}>Tasks & assignments</Text>
+              </View>
+              <Badge count={reminderUnread} />
+              <Text style={{ fontSize: 16, color: C.text4, marginLeft: 4 }}>›</Text>
+            </TouchableOpacity>
+          }
           ListEmptyComponent={
             <View style={{ alignItems: 'center', paddingTop: 60 }}>
               <Text style={{ fontSize: 32 }}>💬</Text>

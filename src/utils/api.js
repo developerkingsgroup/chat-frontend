@@ -87,8 +87,8 @@ export const logCall = data => api.post('/calls', data);
 export const getReminders = view => api.get('/reminders', {params: {view}});
 export const createReminder = data => api.post('/reminders', data);
 export const updateReminder = (id, data) => api.put(`/reminders/${id}`, data);
-export const setReminderStatus = (id, status) =>
-  api.patch(`/reminders/${id}/status`, {status});
+export const setReminderStatus = (id, status, rejection_reason) =>
+  api.patch(`/reminders/${id}/status`, { status, ...(rejection_reason ? { rejection_reason } : {}) });
 export const deleteReminder = id => api.delete(`/reminders/${id}`);
 
 // Chat group permissions
