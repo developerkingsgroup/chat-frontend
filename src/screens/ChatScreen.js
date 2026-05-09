@@ -4,7 +4,7 @@ import {
   View, Text, FlatList, TextInput, TouchableOpacity,
   KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
 } from 'react-native';
-// import AudioRecorderPlayer from 'react-native-audio-recorder-player';
+import AudioRecorderPlayer from 'react-native-audio-recorder-player';
 import { launchImageLibrary } from 'react-native-image-picker';
 import DocumentPicker from 'react-native-document-picker';
 import { useApp } from '../context/AppContext';
@@ -12,7 +12,7 @@ import { getMessages, sendMessage, uploadFile, logCall } from '../utils/api';
 import { C, T, Avatar, Screen } from '../components/UI';
 import moment from 'moment';
 
-// const audioPlayer = new AudioRecorderPlayer();
+const audioPlayer = new AudioRecorderPlayer();
 
 // ── Message Bubble ────────────────────────────────────────────────────────────
 function Bubble({ msg, currentUserId, accent }) {
@@ -21,8 +21,21 @@ function Bubble({ msg, currentUserId, accent }) {
   const [playing, setPlaying] = useState(false);
 
   const toggleVoice = async () => {
-    // if (playing) { await audioPlayer.stopPlayer(); setPlaying(false); }
-    // else { setPlaying(true); await audioPlayer.startPlayer(msg.file_url); audioPlayer.addPlayBackListener(() => setPlaying(false)); }
+    if (playing) {
+      await audioPlayer.stopPlayer();
+      audioPlayer.removePlayBackListener();
+      setPlaying(false);
+    } else {
+      setPlaying(true);
+      await audioPlayer.startPlayer(msg.file_url);
+      audioPlayer.addPlayBackListener((e) => {
+        if (e.currentPosition >= e.duration) {
+          audioPlayer.stopPlayer();
+          audioPlayer.removePlayBackListener();
+          setPlaying(false);
+        }
+      });
+    }
   };
 
   return (
@@ -155,18 +168,18 @@ export default function ChatScreen({ route, navigation }) {
 
   const startRec = async () => {
     setRecording(true); setRecSecs(0);
-    // await audioPlayer.startRecorder();
+    await audioPlayer.startRecorder();
     recTimer.current = setInterval(() => setRecSecs(s=>s+1), 1000);
   };
 
   const stopRec = async () => {
     clearInterval(recTimer.current);
-    // const path = await audioPlayer.stopRecorder();
+    const uri = await audioPlayer.stopRecorder();
     const dur  = recSecs;
     setRecording(false); setRecSecs(0);
     try {
       const fd = new FormData();
-      fd.append('file', { uri:path, name:'voice.m4a', type:'audio/m4a' });
+      fd.append('file', { uri, name:'voice.m4a', type:'audio/m4a' });
       const up = await uploadFile(fd);
       const r  = await sendMessage({ chat_id:chatId, chat_type:chatType, type:'voice', file_url:up.data.url, duration:dur });
       pushMessage(chatType, chatId, r.data);
