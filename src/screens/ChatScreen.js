@@ -1,5 +1,5 @@
 // src/screens/ChatScreen.js
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity, Pressable,
   KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
@@ -8,6 +8,7 @@ import AudioRecorderPlayer from 'react-native-audio-recorder-player';
 import { launchImageLibrary } from 'react-native-image-picker';
 import DocumentPicker from 'react-native-document-picker';
 import { useApp } from '../context/AppContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getMessages, sendMessage, uploadFile, logCall, searchMessages, editMessage, deleteMessage } from '../utils/api';
 import { C, T, Avatar, Screen } from '../components/UI';
 import moment from 'moment';
@@ -127,9 +128,11 @@ export default function ChatScreen({ route, navigation }) {
   const [searchRes,   setSearchRes]   = useState([]);
   const [editingId,   setEditingId]   = useState(null);
 
-  const flatRef     = useRef(null);
-  const recTimer    = useRef(null);
-  const typingTimer = useRef(null);
+  const flatRef       = useRef(null);
+  const recTimer      = useRef(null);
+  const typingTimer   = useRef(null);
+  const draftTimer    = useRef(null);
+  const draftKey      = `draft_${chatType}_${chatId}`;
   const ac          = color || C.blue;
 
   const chatKey = key;
@@ -155,6 +158,11 @@ export default function ChatScreen({ route, navigation }) {
       setSearchRes(r.data);
     } catch {}
   };
+
+  // Restore draft on mount
+  useEffect(() => {
+    AsyncStorage.getItem(draftKey).then(v => { if (v) setInput(v); });
+  }, [chatId]);
 
   useEffect(() => {
     navigation.setOptions({
@@ -190,6 +198,7 @@ export default function ChatScreen({ route, navigation }) {
   const send = async () => {
     if (!input.trim()) return;
     const text = input.trim(); setInput('');
+    AsyncStorage.removeItem(draftKey);
     try {
       if (editingId) {
         await editMessage(editingId, text);
@@ -383,6 +392,12 @@ export default function ChatScreen({ route, navigation }) {
                     () => sendWsFrame({ type:'typing', chatId, chatType, isTyping: false }),
                     2000
                   );
+                  // Persist draft
+                  clearTimeout(draftTimer.current);
+                  draftTimer.current = setTimeout(() => {
+                    if (text.trim()) AsyncStorage.setItem(draftKey, text);
+                    else AsyncStorage.removeItem(draftKey);
+                  }, 500);
                 }}
                 multiline
                 onFocus={()=>setShowAtt(false)}
