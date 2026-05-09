@@ -63,6 +63,14 @@ function Bubble({ msg, currentUserId, accent }) {
             </View>
           )}
 
+          {/* Video */}
+          {msg.type==='video' && (
+            <View style={{ width:200, height:150, backgroundColor:C.border, borderRadius:10, alignItems:'center', justifyContent:'center' }}>
+              <Text style={{ fontSize:32 }}>📹</Text>
+              <Text style={[{color:C.text3, fontSize:11, marginTop:4}]} numberOfLines={1}>{msg.file_name}</Text>
+            </View>
+          )}
+
           {/* File */}
           {msg.type==='file' && (
             <View style={{ flexDirection:'row', alignItems:'center', gap:10, minWidth:170 }}>
@@ -167,13 +175,14 @@ export default function ChatScreen({ route, navigation }) {
 
   const pickImage = async () => {
     setShowAtt(false);
-    const res = await launchImageLibrary({ mediaType:'photo' });
+    const res = await launchImageLibrary({ mediaType:'mixed' });
     if (!res.assets?.[0]) return;
     const img = res.assets[0];
     const fd  = new FormData();
-    fd.append('file', { uri:img.uri, name:img.fileName||'photo.jpg', type:img.type||'image/jpeg' });
-    const up = await uploadFile(fd);
-    const r  = await sendMessage({ chat_id:chatId, chat_type:chatType, type:'image', file_url:up.data.url, file_name:img.fileName });
+    fd.append('file', { uri:img.uri, name:img.fileName||'media', type:img.type||'image/jpeg' });
+    const up  = await uploadFile(fd);
+    const isVideo = img.type?.startsWith('video/');
+    const r   = await sendMessage({ chat_id:chatId, chat_type:chatType, type: isVideo ? 'video' : 'image', file_url:up.data.url, file_name:img.fileName });
     pushMessage(chatType, chatId, r.data);
   };
 
