@@ -133,17 +133,19 @@ function QuickDetailSheet({ r, users, currentUser, onClose, onAction, onDataChan
 
   if (!r) return null;
 
-  const forUserId  = getRefId(r.for_user_id);
-  const creatorId  = getRefId(r.created_by);
-  const forUser    = resolveUser(r.for_user_id, users);
-  const fromUser   = resolveUser(r.created_by, users);
-  const isAssignee = forUserId === currentUser?.id;
-  const canEdit    = isAssignee && (r.status === 'pending' || r.status === 'rejected');
-  const iCanReview = r.status === 'review' && (
+  const forUserId      = getRefId(r.for_user_id);
+  const creatorId      = getRefId(r.created_by);
+  const forUser        = resolveUser(r.for_user_id, users);
+  const fromUser       = resolveUser(r.created_by, users);
+  const isAssignee     = forUserId === currentUser?.id;
+  const isSelfAssigned = forUserId === creatorId;
+  const canEdit        = isAssignee && (r.status === 'pending' || r.status === 'rejected');
+  const iCanReview     = r.status === 'review' && !isSelfAssigned && (
     creatorId === currentUser?.id ||
-    currentUser?.is_super_admin ||
-    ['Manager', 'General'].some(k => (currentUser?.role || '').includes(k))
+    currentUser?.is_super_admin
   );
+  const markDoneStatus = isSelfAssigned ? 'approved' : 'review';
+  const markDoneLabel  = isSelfAssigned ? 'Mark as Done' : 'Submit for Review';
 
   const pr = PRIORITY[r.priority] || PRIORITY.medium;
   const st = STATUS[r.status]     || STATUS.pending;
@@ -263,11 +265,11 @@ function QuickDetailSheet({ r, users, currentUser, onClose, onAction, onDataChan
             {/* Actions */}
             <View style={{ gap: 8 }}>
               {isAssignee && r.status === 'pending' && (
-                <TouchableOpacity onPress={() => { onAction(r.id, 'review'); onClose(); }} style={{
+                <TouchableOpacity onPress={() => { onAction(r.id, markDoneStatus); onClose(); }} style={{
                   backgroundColor: '#92400E22', borderWidth: 1, borderColor: '#92400E66',
                   borderRadius: 10, padding: 13, alignItems: 'center',
                 }}>
-                  <Text style={{ color: '#FBBF24', fontWeight: '700' }}>✓  Mark as Done</Text>
+                  <Text style={{ color: '#FBBF24', fontWeight: '700' }}>✓  {markDoneLabel}</Text>
                 </TouchableOpacity>
               )}
               {iCanReview && !showReassignEdit && (

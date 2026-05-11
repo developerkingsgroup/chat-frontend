@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { useApp } from '../context/AppContext';
-import { 
+import {
   createUser, updateUser, deleteUser,
   createCompany, updateCompany, deleteCompany,
   createBranch, updateBranch,
@@ -23,36 +23,93 @@ function Header({ title, onBack, right }) {
   );
 }
 
+// ── Chip selector ─────────────────────────────────────────────────────────────
+function ChipSelect({ label, items, selected, onSelect }) {
+  return (
+    <View style={{ marginBottom: 20 }}>
+      <Text style={[T.xs, { marginBottom: 8, color: C.text3 }]}>{label}</Text>
+      {items.length === 0
+        ? <Text style={{ color: C.text3, fontSize: 12 }}>None available</Text>
+        : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {items.map(item => (
+              <TouchableOpacity
+                key={item.id}
+                onPress={() => onSelect(item.id)}
+                style={{
+                  paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: selected === item.id ? C.blue : C.border,
+                  backgroundColor: selected === item.id ? C.blue + '22' : C.card,
+                  marginRight: 8,
+                }}>
+                <Text style={{ color: selected === item.id ? C.blue : C.text3 }}>
+                  {item.avatar ? `${item.avatar} ` : ''}{item.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )
+      }
+    </View>
+  );
+}
+
 // ── Manage User ───────────────────────────────────────────────────────────────
 export function ManageUserScreen({ route, navigation }) {
   const { user } = route.params || {};
   const { companies, departments, loadAll, token } = useApp();
-  
-  const [name,     setName]     = useState(user?.name || '');
-  const [email,    setEmail]    = useState(user?.email || '');
-  const [password, setPassword] = useState('');
-  const [role,     setRole]     = useState(user?.role || 'User');
-  const [avatar,   setAvatar]   = useState(user?.avatar || '👤');
-  const [color,    setColor]    = useState(user?.color || C.blue);
-  const [isAdmin,  setIsAdmin]  = useState(!!user?.is_super_admin);
-  const [loading,  setLoading]  = useState(false);
 
-  // For simplicity, we just save the basic info. 
-  // In a real app, we'd also handle company/branch/dept assignments.
+  // Flatten branches from companies
+  const allBranches = companies.flatMap(c =>
+    (c.branches || []).map(b => ({ ...b, companyName: c.name }))
+  );
+
+  const [name,      setName]      = useState(user?.name || '');
+  const [email,     setEmail]     = useState(user?.email || '');
+  const [mobile,    setMobile]    = useState(user?.mobile || '');
+  const [password,  setPassword]  = useState('');
+  const [role,      setRole]      = useState(user?.role || 'User');
+  const [avatar,    setAvatar]    = useState(user?.avatar || '👤');
+  const [color,     setColor]     = useState(user?.color || C.blue);
+  const [isAdmin,   setIsAdmin]   = useState(!!user?.is_super_admin);
+  const [branchId,  setBranchId]  = useState('');
+  const [deptId,    setDeptId]    = useState('');
+  const [loading,   setLoading]   = useState(false);
+
+  // Reset dept when branch changes
+  useEffect(() => { setDeptId(''); }, [branchId]);
+
+  // Filter departments by selected branch
+  const deptsForBranch = departments.filter(d => d.branch_id === branchId);
 
   const save = async () => {
-    if (!name || !email || (!user && !password)) return Alert.alert('Error', 'Missing fields');
+    if (!name.trim()) return Alert.alert('Error', 'Name is required');
+    if (!user) {
+      if (!email.trim()) return Alert.alert('Error', 'Email is required');
+      if (!mobile.trim()) return Alert.alert('Error', 'Mobile number is required');
+      if (mobile.trim().length < 7) return Alert.alert('Error', 'Enter a valid mobile number');
+      if (!password || password.length < 8) return Alert.alert('Error', 'Password must be at least 8 characters');
+      if (!isAdmin && !branchId) return Alert.alert('Error', 'Please assign a branch');
+      if (!isAdmin && !deptId)   return Alert.alert('Error', 'Please assign a department');
+    }
     setLoading(true);
     try {
       if (user) {
         await updateUser(user.id, { name, role, avatar, color, is_super_admin: isAdmin });
       } else {
-        await createUser({ name, email, password, role, avatar, color, is_super_admin: isAdmin });
+        await createUser({
+          name, email: email.trim(), mobile: mobile.trim(), password,
+          role, avatar, color, is_super_admin: isAdmin,
+          branches:    isAdmin ? [] : [branchId],
+          departments: isAdmin ? [] : [deptId],
+        });
       }
       await loadAll(token);
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', e.response?.data?.error || 'Could not save');
+      const msg = e.response?.data?.error || e.message || 'Could not save';
+      Alert.alert('Error', typeof msg === 'string' ? msg : JSON.stringify(msg));
     } finally {
       setLoading(false);
     }
@@ -69,7 +126,7 @@ export function ManageUserScreen({ route, navigation }) {
 
   return (
     <Screen>
-      <Header title={user ? 'Edit User' : 'Create User'} onBack={() => navigation.goBack()} 
+      <Header title={user ? 'Edit User' : 'Create User'} onBack={() => navigation.goBack()}
         right={user && <TouchableOpacity onPress={del}><Text style={{color:C.red, fontSize:13, fontWeight:'600'}}>Delete</Text></TouchableOpacity>} />
       <ScrollView contentContainerStyle={{ padding: 16 }}>
         <View style={{ alignItems: 'center', marginBottom: 20 }}>
@@ -85,15 +142,37 @@ export function ManageUserScreen({ route, navigation }) {
 
         <Field label="Full Name" value={name} onChangeText={setName} placeholder="John Doe" />
         <Field label="Email Address" value={email} onChangeText={setEmail} placeholder="john@example.com" keyboardType="email-address" autoCapitalize="none" editable={!user} />
-        {!user && <Field label="Password" value={password} onChangeText={setPassword} placeholder="••••••••" secureTextEntry />}
+        {!user && (
+          <Field label="Mobile Number" value={mobile} onChangeText={setMobile}
+            placeholder="+911234567890" keyboardType="phone-pad" />
+        )}
+        {!user && <Field label="Password (min 8 chars)" value={password} onChangeText={setPassword} placeholder="••••••••" secureTextEntry />}
         <Field label="Role / Title" value={role} onChangeText={setRole} placeholder="e.g. Sales Manager" />
-        
+
         <TouchableOpacity onPress={() => setIsAdmin(!isAdmin)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 20 }}>
           <View style={{ width: 20, height: 20, borderRadius: 5, borderWidth: 2, borderColor: isAdmin ? C.blue : C.border2, backgroundColor: isAdmin ? C.blue : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
             {isAdmin && <Text style={{ color: '#fff', fontSize: 12 }}>✓</Text>}
           </View>
           <Text style={T.sm}>Grant Super Admin Privileges</Text>
         </TouchableOpacity>
+
+        {/* Branch + Department assignment (not needed for super admins) */}
+        {!user && !isAdmin && (
+          <>
+            <ChipSelect
+              label="Assign Branch"
+              items={allBranches.map(b => ({ id: b.id, name: `${b.name} (${b.companyName})` }))}
+              selected={branchId}
+              onSelect={setBranchId}
+            />
+            <ChipSelect
+              label="Assign Department"
+              items={deptsForBranch.map(d => ({ id: d.id, name: d.name }))}
+              selected={deptId}
+              onSelect={setDeptId}
+            />
+          </>
+        )}
 
         <PrimaryBtn label={user ? 'Save Changes' : 'Create User'} onPress={save} loading={loading} />
       </ScrollView>
@@ -105,23 +184,38 @@ export function ManageUserScreen({ route, navigation }) {
 export function ManageCompanyScreen({ route, navigation }) {
   const { company } = route.params || {};
   const { loadAll, token } = useApp();
-  
+
   const [name,    setName]    = useState(company?.name || '');
+  const [code,    setCode]    = useState('');
   const [tagline, setTagline] = useState(company?.tagline || '');
   const [avatar,  setAvatar]  = useState(company?.avatar || '🏢');
   const [color,   setColor]   = useState(company?.color || C.blue);
   const [loading, setLoading] = useState(false);
 
+  // Auto-fill code from name when user types (only for new company)
+  const handleNameChange = (text) => {
+    setName(text);
+    if (!company) {
+      setCode(text.replace(/[^A-Za-z0-9]/g, '').slice(0, 10).toUpperCase());
+    }
+  };
+
   const save = async () => {
-    if (!name) return Alert.alert('Error', 'Name required');
+    if (!name.trim()) return Alert.alert('Error', 'Company name is required');
+    if (!company && !code.trim()) return Alert.alert('Error', 'Company code is required');
+    if (!company && code.trim().length < 2) return Alert.alert('Error', 'Code must be at least 2 characters');
     setLoading(true);
     try {
-      if (company) await updateCompany(company.id, { name, tagline, avatar, color });
-      else await createCompany({ name, tagline, avatar, color });
+      if (company) {
+        await updateCompany(company.id, { name: name.trim(), tagline, avatar, color });
+      } else {
+        await createCompany({ name: name.trim(), code: code.trim().toUpperCase(), tagline, avatar, color });
+      }
       await loadAll(token);
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', 'Could not save');
+      const msg = e.response?.data?.error || e.message || 'Could not save';
+      Alert.alert('Error', typeof msg === 'string' ? msg : JSON.stringify(msg));
     } finally { setLoading(false); }
   };
 
@@ -129,7 +223,17 @@ export function ManageCompanyScreen({ route, navigation }) {
     <Screen>
       <Header title={company ? 'Edit Company' : 'New Company'} onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={{ padding: 16 }}>
-        <Field label="Company Name" value={name} onChangeText={setName} placeholder="e.g. TravKings Ltd" />
+        <Field label="Company Name" value={name} onChangeText={handleNameChange} placeholder="e.g. TravKings Ltd" />
+        {!company && (
+          <Field
+            label="Company Code (unique, 2-20 chars)"
+            value={code}
+            onChangeText={t => setCode(t.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
+            placeholder="e.g. TRAVKINGS"
+            autoCapitalize="characters"
+            maxLength={20}
+          />
+        )}
         <Field label="Tagline" value={tagline} onChangeText={setTagline} placeholder="e.g. Travel with ease" />
         <Field label="Avatar Emoji" value={avatar} onChangeText={setAvatar} placeholder="🏢" />
         <Field label="Theme Color" value={color} onChangeText={setColor} placeholder="#3B82F6" />
@@ -148,14 +252,16 @@ export function ManageBranchScreen({ route, navigation }) {
   const [loading,   setLoading]   = useState(false);
 
   const save = async () => {
-    if (!name || !companyId) return Alert.alert('Error', 'Missing fields');
+    if (!name.trim()) return Alert.alert('Error', 'Branch name is required');
+    if (!companyId) return Alert.alert('Error', 'Please select a company');
     setLoading(true);
     try {
-      await createBranch({ company_id: companyId, name, city });
+      await createBranch({ company_id: companyId, name: name.trim(), city: city.trim() });
       await loadAll(token);
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', 'Could not create branch');
+      const msg = e.response?.data?.error || e.message || 'Could not create branch';
+      Alert.alert('Error', typeof msg === 'string' ? msg : JSON.stringify(msg));
     } finally { setLoading(false); }
   };
 
@@ -163,16 +269,14 @@ export function ManageBranchScreen({ route, navigation }) {
     <Screen>
       <Header title="New Branch" onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={{ padding: 16 }}>
-        <Text style={[T.xs, { marginBottom: 8 }]}>Select Company</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
-          {companies.map(c => (
-            <TouchableOpacity key={c.id} onPress={() => setCompanyId(c.id)} style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: companyId === c.id ? C.blue : C.border, backgroundColor: companyId === c.id ? C.blue + '22' : C.card, marginRight: 8 }}>
-              <Text style={{ color: companyId === c.id ? C.blue : C.text3 }}>{c.avatar} {c.name}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        <ChipSelect
+          label="Select Company"
+          items={companies.map(c => ({ id: c.id, name: c.name, avatar: c.avatar }))}
+          selected={companyId}
+          onSelect={setCompanyId}
+        />
         <Field label="Branch Name" value={name} onChangeText={setName} placeholder="e.g. Head Office" />
-        <Field label="City" value={city} onChangeText={setCity} placeholder="e.g. London" />
+        <Field label="City / Address" value={city} onChangeText={setCity} placeholder="e.g. Mumbai" />
         <PrimaryBtn label="Create Branch" onPress={save} loading={loading} />
       </ScrollView>
     </Screen>
@@ -181,22 +285,48 @@ export function ManageBranchScreen({ route, navigation }) {
 
 // ── Manage Department ─────────────────────────────────────────────────────────
 export function ManageDeptScreen({ navigation }) {
-  const { loadAll, token } = useApp();
-  const [name,      setName]      = useState('');
-  const [shortName, setShortName] = useState('');
-  const [icon,      setIcon]      = useState('🏷️');
-  const [color,     setColor]     = useState(C.purple);
-  const [loading,   setLoading]   = useState(false);
+  const { companies, loadAll, token } = useApp();
+
+  // Flatten all branches from companies (companies already have branches nested)
+  const allBranches = companies.flatMap(c =>
+    (c.branches || []).map(b => ({ ...b, companyName: c.name }))
+  );
+
+  const [companyId,  setCompanyId]  = useState(companies[0]?.id || '');
+  const [branchId,   setBranchId]   = useState('');
+  const [name,       setName]       = useState('');
+  const [shortName,  setShortName]  = useState('');
+  const [icon,       setIcon]       = useState('🏷️');
+  const [color,      setColor]      = useState(C.purple);
+  const [loading,    setLoading]    = useState(false);
+
+  // When company changes, reset branch selection
+  useEffect(() => {
+    setBranchId('');
+  }, [companyId]);
+
+  const branchesForCompany = allBranches.filter(b => b.company_id === companyId);
 
   const save = async () => {
-    if (!name || !shortName) return Alert.alert('Error', 'Missing fields');
+    if (!name.trim())      return Alert.alert('Error', 'Department name is required');
+    if (!shortName.trim()) return Alert.alert('Error', 'Short name (code) is required');
+    if (!companyId)        return Alert.alert('Error', 'Please select a company');
+    if (!branchId)         return Alert.alert('Error', 'Please select a branch');
     setLoading(true);
     try {
-      await createDepartment({ name, short_name: shortName, icon, color });
+      await createDepartment({
+        name: name.trim(),
+        short_name: shortName.trim().toUpperCase(),
+        icon,
+        color,
+        branch_id: branchId,
+        company_id: companyId,
+      });
       await loadAll(token);
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', 'Could not create department');
+      const msg = e.response?.data?.error || e.message || 'Could not create department';
+      Alert.alert('Error', typeof msg === 'string' ? msg : JSON.stringify(msg));
     } finally { setLoading(false); }
   };
 
@@ -204,8 +334,20 @@ export function ManageDeptScreen({ navigation }) {
     <Screen>
       <Header title="New Department" onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={{ padding: 16 }}>
+        <ChipSelect
+          label="Select Company"
+          items={companies.map(c => ({ id: c.id, name: c.name, avatar: c.avatar }))}
+          selected={companyId}
+          onSelect={setCompanyId}
+        />
+        <ChipSelect
+          label="Select Branch"
+          items={branchesForCompany.map(b => ({ id: b.id, name: b.name }))}
+          selected={branchId}
+          onSelect={setBranchId}
+        />
         <Field label="Department Name" value={name} onChangeText={setName} placeholder="e.g. Marketing" />
-        <Field label="Short Name" value={shortName} onChangeText={setShortName} placeholder="e.g. MKTG" maxLength={4} />
+        <Field label="Short Code (2-8 chars)" value={shortName} onChangeText={setShortName} placeholder="e.g. MKTG" maxLength={8} autoCapitalize="characters" />
         <Field label="Icon Emoji" value={icon} onChangeText={setIcon} placeholder="🏷️" />
         <Field label="Color" value={color} onChangeText={setColor} placeholder="#8B5CF6" />
         <PrimaryBtn label="Create Department" onPress={save} loading={loading} />

@@ -105,7 +105,7 @@ function Bubble({ msg, currentUserId, accent, onLongPress }) {
           )}
 
           <Text style={{ fontSize:10, color:own?'rgba(255,255,255,.45)':C.text4, textAlign:'right', marginTop:5 }}>
-            {moment(msg.created_at).format('h:mm A')}{own ? (msg.is_read ? ' ✓✓' : ' ✓') : ''}
+            {moment(msg.created_at).format('h:mm A')}{own ? (msg.pending ? ' ⏳' : msg.is_read ? ' ✓✓' : ' ✓') : ''}
           </Text>
         </Pressable>
       </View>
@@ -116,7 +116,7 @@ function Bubble({ msg, currentUserId, accent, onLongPress }) {
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function ChatScreen({ route, navigation }) {
   const { chatType, chatId, title, subtitle, avatar, color } = route.params;
-  const { currentUser, messages:allMsgs, loadMessages, pushMessage, updateMessage, clearUnread, sendWsFrame, typingMap, users, chatGroups, isAdmin } = useApp();
+  const { currentUser, messages:allMsgs, loadMessages, pushMessage, replaceMessage, removeMessage, updateMessage, clearUnread, sendWsFrame, typingMap, users, chatGroups, isAdmin } = useApp();
 
   const [input,       setInput]       = useState('');
   const [recording,   setRecording]   = useState(false);
@@ -195,6 +195,20 @@ export default function ChatScreen({ route, navigation }) {
     finally { setLoading(false); }
   };
 
+  // Build a temporary optimistic message shown before server confirms
+  const makeOptimistic = (type, content, extra = {}) => ({
+    id: `opt_${Date.now()}`,
+    chat_id: chatId, chat_type: chatType,
+    sender_id: currentUser?.id,
+    sender_name: currentUser?.name,
+    sender_avatar: currentUser?.avatar,
+    sender_color: currentUser?.color,
+    type, content: content || null,
+    created_at: new Date().toISOString(),
+    pending: true,
+    ...extra,
+  });
+
   const send = async () => {
     if (!input.trim()) return;
     const text = input.trim(); setInput('');
@@ -206,12 +220,17 @@ export default function ChatScreen({ route, navigation }) {
         updateMessage(chatType, chatId, { id: editId, content: text, is_edited: true }, currentUser?.id);
         await editMessage(editId, text);
       } else {
-        const r = await sendMessage({ chat_id:chatId, chat_type:chatType, type:'text', content:text });
-        pushMessage(chatType, chatId, r.data, currentUser?.id);
+        const opt = makeOptimistic('text', text);
+        pushMessage(chatType, chatId, opt, currentUser?.id);
+        try {
+          const r = await sendMessage({ chat_id:chatId, chat_type:chatType, type:'text', content:text });
+          replaceMessage(chatType, chatId, opt.id, r.data, currentUser?.id);
+        } catch (err) {
+          removeMessage(chatType, chatId, opt.id, currentUser?.id);
+          Alert.alert('Error', 'Could not send message');
+        }
       }
-    } catch (err) {
-      Alert.alert('Error', 'Could not send message');
-    }
+    } catch {}
   };
 
   const onLongPressBubble = (msg) => {
@@ -241,8 +260,10 @@ export default function ChatScreen({ route, navigation }) {
       const fd = new FormData();
       fd.append('file', { uri, name:'voice.m4a', type:'audio/m4a' });
       const up = await uploadFile(fd);
-      const r  = await sendMessage({ chat_id:chatId, chat_type:chatType, type:'voice', file_url:up.data.url, duration:dur });
-      pushMessage(chatType, chatId, r.data, currentUser?.id);
+      const opt = makeOptimistic('voice', null, { file_url: up.data.url, duration: dur });
+      pushMessage(chatType, chatId, opt, currentUser?.id);
+      const r = await sendMessage({ chat_id:chatId, chat_type:chatType, type:'voice', file_url:up.data.url, duration:dur });
+      replaceMessage(chatType, chatId, opt.id, r.data, currentUser?.id);
     } catch {}
   };
 
@@ -255,8 +276,11 @@ export default function ChatScreen({ route, navigation }) {
     fd.append('file', { uri:img.uri, name:img.fileName||'media', type:img.type||'image/jpeg' });
     const up  = await uploadFile(fd);
     const isVideo = img.type?.startsWith('video/');
-    const r   = await sendMessage({ chat_id:chatId, chat_type:chatType, type: isVideo ? 'video' : 'image', file_url:up.data.url, file_name:img.fileName });
-    pushMessage(chatType, chatId, r.data, currentUser?.id);
+    const msgType = isVideo ? 'video' : 'image';
+    const opt = makeOptimistic(msgType, null, { file_url: up.data.url, file_name: img.fileName });
+    pushMessage(chatType, chatId, opt, currentUser?.id);
+    const r = await sendMessage({ chat_id:chatId, chat_type:chatType, type: msgType, file_url:up.data.url, file_name:img.fileName });
+    replaceMessage(chatType, chatId, opt.id, r.data, currentUser?.id);
   };
 
   const pickDoc = async () => {
@@ -266,8 +290,10 @@ export default function ChatScreen({ route, navigation }) {
       const fd  = new FormData();
       fd.append('file', { uri:res.uri, name:res.name, type:res.type||'application/octet-stream' });
       const up = await uploadFile(fd);
-      const r  = await sendMessage({ chat_id:chatId, chat_type:chatType, type:'file', file_url:up.data.url, file_name:res.name, file_size:up.data.size });
-      pushMessage(chatType, chatId, r.data, currentUser?.id);
+      const opt = makeOptimistic('file', null, { file_url: up.data.url, file_name: res.name, file_size: up.data.size });
+      pushMessage(chatType, chatId, opt, currentUser?.id);
+      const r = await sendMessage({ chat_id:chatId, chat_type:chatType, type:'file', file_url:up.data.url, file_name:res.name, file_size:up.data.size });
+      replaceMessage(chatType, chatId, opt.id, r.data, currentUser?.id);
     } catch {}
   };
 

@@ -176,17 +176,20 @@ function QuickDetailSheet({r, users, currentUser, onClose, onAction, onSave}) {
 
   if (!r) return null;
 
-  const forUserId  = getRefId(r.for_user_id);
-  const creatorId  = getRefId(r.created_by);
-  const forUser    = resolveUser(r.for_user_id, users);
-  const fromUser   = resolveUser(r.created_by, users);
-  const isAssignee = forUserId === currentUser?.id;
-  const canEdit    = isAssignee && (r.status === 'pending' || r.status === 'rejected');
-  const iCanReview = r.status === 'review' && (
+  const forUserId      = getRefId(r.for_user_id);
+  const creatorId      = getRefId(r.created_by);
+  const forUser        = resolveUser(r.for_user_id, users);
+  const fromUser       = resolveUser(r.created_by, users);
+  const isAssignee     = forUserId === currentUser?.id;
+  const isSelfAssigned = forUserId === creatorId;
+  const canEdit        = isAssignee && (r.status === 'pending' || r.status === 'rejected');
+  // Only the original creator (or super_admin) can approve/reject. No review loop for self-assigned.
+  const iCanReview     = r.status === 'review' && !isSelfAssigned && (
     creatorId === currentUser?.id ||
-    currentUser?.is_super_admin ||
-    ['Manager', 'General'].some(k => (currentUser?.role || '').includes(k))
+    currentUser?.is_super_admin
   );
+  const markDoneStatus = isSelfAssigned ? 'approved' : 'review';
+  const markDoneLabel  = isSelfAssigned ? 'Mark as Done' : 'Submit for Review';
 
   const pr = PRIORITY[r.priority] || PRIORITY.medium;
   const st = STATUS[r.status]     || STATUS.pending;
@@ -325,11 +328,11 @@ function QuickDetailSheet({r, users, currentUser, onClose, onAction, onSave}) {
             {/* Status actions */}
             <View style={{gap: 8}}>
               {isAssignee && r.status === 'pending' && (
-                <TouchableOpacity onPress={() => { onAction(r.id, 'review'); onClose(); }} style={{
+                <TouchableOpacity onPress={() => { onAction(r.id, markDoneStatus); onClose(); }} style={{
                   backgroundColor: '#92400E22', borderWidth: 1, borderColor: '#92400E66',
                   borderRadius: 10, padding: 13, alignItems: 'center',
                 }}>
-                  <Text style={{color: '#FBBF24', fontWeight: '700'}}>✓  Mark as Done</Text>
+                  <Text style={{color: '#FBBF24', fontWeight: '700'}}>✓  {markDoneLabel}</Text>
                 </TouchableOpacity>
               )}
               {iCanReview && !showReassignEdit && (
@@ -747,7 +750,10 @@ export default function RemindersScreen({navigation}) {
   }, [navigation]);
 
   const load = async () => {
-    try { const r = await getReminders(view); setReminders(r.data); } catch {}
+    try {
+      const r = await getReminders(view);
+      setReminders(r.data);
+    } catch {}
   };
 
   useFocusEffect(useCallback(() => { load(); }, [view]));
@@ -777,14 +783,8 @@ export default function RemindersScreen({navigation}) {
     ['all',    '🌐 All'],
   ];
 
-  const pending  = reminders.filter(r => r.status === 'pending');
-  const reviewCount = reminders.filter(
-    r => r.status === 'review' && (
-      getRefId(r.created_by) === currentUser?.id ||
-      currentUser?.is_super_admin ||
-      ['Manager', 'General'].some(k => (currentUser?.role || '').includes(k))
-    ),
-  ).length;
+  // review tab already scoped server-side; count is just the array length
+  const reviewCount = view === 'review' ? reminders.length : 0;
 
   return (
     <Screen>
@@ -813,39 +813,46 @@ export default function RemindersScreen({navigation}) {
 
       <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.purple} />}>
 
-        {/* ── Mine ── */}
+        {/* ── Mine — all statuses grouped ── */}
         {view === 'mine' && (
           <>
-            {pending.length === 0 ? (
+            {reminders.length === 0 ? (
               <View style={{alignItems: 'center', paddingTop: 60}}>
                 <Text style={{fontSize: 32}}>🔔</Text>
-                <Text style={[T.sm, {marginTop: 8}]}>No pending reminders</Text>
+                <Text style={[T.sm, {marginTop: 8}]}>No reminders assigned to you</Text>
               </View>
             ) : (
-              <>
-                <SectionLabel text="Pending" count={pending.length} />
-                {pending.map(r => <RCard key={r.id} r={r} onPress={setDetailRem} />)}
-              </>
+              ['pending', 'review', 'rejected', 'approved'].map(status => {
+                const group = reminders.filter(r => r.status === status);
+                if (!group.length) return null;
+                const st = STATUS[status] || STATUS.pending;
+                return (
+                  <React.Fragment key={status}>
+                    <SectionLabel text={`${st.icon}  ${st.label}`} count={group.length} />
+                    {group.map(r => <RCard key={r.id} r={r} onPress={setDetailRem} />)}
+                  </React.Fragment>
+                );
+              })
             )}
           </>
         )}
 
-        {/* ── Others ── */}
+        {/* ── Others — reminders I created for others, all statuses ── */}
         {view === 'others' && (
           <GroupedUserView
-            reminders={reminders.filter(r => r.status !== 'review')} users={users} currentUser={currentUser}
+            reminders={reminders} users={users} currentUser={currentUser}
             expandedUsers={expandedUsers} setExpandedUsers={setExpandedUsers}
             onOpenDetail={setDetailRem}
           />
         )}
 
-        {/* ── Review ── */}
+        {/* ── Review — tasks marked done waiting for my approval ── */}
         {view === 'review' && (
           <>
             {reminders.length === 0 ? (
               <View style={{alignItems: 'center', paddingTop: 60}}>
                 <Text style={{fontSize: 32}}>✅</Text>
-                <Text style={[T.sm, {marginTop: 8}]}>No pending reviews</Text>
+                <Text style={[T.sm, {marginTop: 8}]}>Nothing to review</Text>
               </View>
             ) : (
               <>
@@ -861,10 +868,10 @@ export default function RemindersScreen({navigation}) {
           </>
         )}
 
-        {/* ── All ── */}
+        {/* ── All — everything I'm involved in, all statuses ── */}
         {view === 'all' && (
           <GroupedUserView
-            reminders={reminders.filter(r => r.status !== 'review')} users={users} currentUser={currentUser}
+            reminders={reminders} users={users} currentUser={currentUser}
             expandedUsers={expandedUsers} setExpandedUsers={setExpandedUsers}
             onOpenDetail={setDetailRem}
           />

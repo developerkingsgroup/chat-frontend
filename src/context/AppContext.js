@@ -68,7 +68,11 @@ export function AppProvider({ children }) {
       const key = data.chat_type === 'group'
         ? `group_${data.chat_id}`
         : `direct_${[data.chat_id, data.sender_id].sort().join('_')}`;
-      setMessages(prev => ({ ...prev, [key]: [...(prev[key] || []), data] }));
+      setMessages(prev => {
+        const existing = prev[key] || [];
+        if (existing.some(m => m.id === data.id)) return prev;
+        return { ...prev, [key]: [...existing, data] };
+      });
       const isOwn = data.sender_id === me;
       if (data.chat_type === 'group') {
         setChatGroups(prev => prev.map(g => g.id === data.chat_id
@@ -178,7 +182,28 @@ export function AppProvider({ children }) {
 
   const pushMessage = (type, chatId, msg, myId) => {
     const key = type === 'group' ? `group_${chatId}` : `direct_${[chatId, myId].sort().join('_')}`;
-    setMessages(prev => ({ ...prev, [key]: [...(prev[key]||[]), msg] }));
+    setMessages(prev => {
+      const existing = prev[key] || [];
+      if (msg.id && existing.some(m => m.id === msg.id)) return prev;
+      return { ...prev, [key]: [...existing, msg] };
+    });
+  };
+
+  const replaceMessage = (type, chatId, tempId, realMsg, myId) => {
+    const key = type === 'group' ? `group_${chatId}` : `direct_${[chatId, myId].sort().join('_')}`;
+    setMessages(prev => {
+      const existing = prev[key] || [];
+      if (existing.some(m => m.id === realMsg.id)) {
+        // real msg already arrived via WS — just remove the temp
+        return { ...prev, [key]: existing.filter(m => m.id !== tempId) };
+      }
+      return { ...prev, [key]: existing.map(m => m.id === tempId ? realMsg : m) };
+    });
+  };
+
+  const removeMessage = (type, chatId, msgId, myId) => {
+    const key = type === 'group' ? `group_${chatId}` : `direct_${[chatId, myId].sort().join('_')}`;
+    setMessages(prev => ({ ...prev, [key]: (prev[key] || []).filter(m => m.id !== msgId) }));
   };
 
   const updateMessage = (type, chatId, updatedMsg, myId) => {
@@ -206,7 +231,7 @@ export function AppProvider({ children }) {
       chatGroups, conversations, messages, loading, reminderSignal, reminderUnread, clearReminderUnread,
       onlineUsers, typingMap, chatUnread, groupUnread, getKey,
       signIn, signOut, loadAll, sendWsFrame,
-      loadMessages, pushMessage, updateMessage, clearUnread,
+      loadMessages, pushMessage, replaceMessage, removeMessage, updateMessage, clearUnread,
       setUsers, setCompanies, setChatGroups, setConversations,
     }}>
       {children}
