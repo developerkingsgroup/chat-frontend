@@ -2,10 +2,10 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// export const BASE_URL = 'https://chat-backend-production-644a.up.railway.app';
-// export const WS_URL   = 'wss://chat-backend-production-644a.up.railway.app';
-export const BASE_URL = 'http://192.168.1.18:4000';
-export const WS_URL = 'ws://192.168.1.18:4000';
+export const BASE_URL = 'https://chat-backend-production-644a.up.railway.app';
+export const WS_URL   = 'wss://chat-backend-production-644a.up.railway.app';
+// export const BASE_URL = 'http://192.168.1.18:4000';
+// export const WS_URL = 'ws://192.168.1.18:4000';
 
 const api = axios.create({baseURL: `${BASE_URL}/api`});
 

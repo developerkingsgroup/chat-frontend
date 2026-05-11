@@ -18,8 +18,10 @@ export function AppProvider({ children }) {
   const [loading,       setLoading]       = useState(true);
   const [onlineUsers,   setOnlineUsers]   = useState(new Set());
   const [typingMap,     setTypingMap]     = useState({}); // { "group_id" | "direct_id": Set<userId> }
-  const wsRef = useRef(null);
-  const currentUserRef = useRef(null);
+  const wsRef              = useRef(null);
+  const currentUserRef     = useRef(null);
+  const reconnectAttemptRef = useRef(0);
+  const reconnectTimerRef   = useRef(null);
 
   // Keep currentUserRef in sync so WS handlers always see the current user
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
@@ -50,13 +52,31 @@ export function AppProvider({ children }) {
 
   // ── WebSocket ────────────────────────────────────────────────────────────────
   const connectWS = useCallback((tok) => {
+    clearTimeout(reconnectTimerRef.current);
     if (wsRef.current) { try { wsRef.current.close(); } catch {} }
+
     const ws = new WebSocket(`${WS_URL}?token=${tok}`);
+
+    ws.onopen = () => {
+      reconnectAttemptRef.current = 0; // reset backoff on successful connect
+    };
+
     ws.onmessage = (e) => {
       try { handleEvent(JSON.parse(e.data)); } catch {}
     };
-    ws.onerror  = () => {};
-    ws.onclose  = () => { setTimeout(() => tok && connectWS(tok), 4000); };
+
+    // Force close so onclose always fires and triggers reconnect
+    ws.onerror = () => { try { ws.close(); } catch {} };
+
+    ws.onclose = () => {
+      if (!tok) return; // signed out — don't reconnect
+      const attempt = reconnectAttemptRef.current;
+      reconnectAttemptRef.current = attempt + 1;
+      // Exponential backoff: 1s, 2s, 4s, 8s, 16s, 30s max
+      const delay = Math.min(1000 * Math.pow(2, attempt), 30000);
+      reconnectTimerRef.current = setTimeout(() => connectWS(tok), delay);
+    };
+
     wsRef.current = ws;
   }, []);
 
@@ -133,6 +153,22 @@ export function AppProvider({ children }) {
         else next.delete(data.userId);
         return next;
       });
+      // When a user disconnects, remove them from every typing set
+      if (data.status === 'offline') {
+        setTypingMap(prev => {
+          const next = { ...prev };
+          let changed = false;
+          Object.keys(next).forEach(key => {
+            if (next[key]?.has?.(data.userId)) {
+              const set = new Set(next[key]);
+              set.delete(data.userId);
+              next[key] = set;
+              changed = true;
+            }
+          });
+          return changed ? next : prev;
+        });
+      }
     }
 
     if (event === 'online_users_snapshot') {
@@ -158,6 +194,8 @@ export function AppProvider({ children }) {
   };
 
   const signOut = async () => {
+    clearTimeout(reconnectTimerRef.current); // stop any pending reconnect
+    reconnectAttemptRef.current = 0;
     wsRef.current?.close();
     await AsyncStorage.removeItem('token');
     setToken(null); setCurrentUser(null); setUsers([]); setCompanies([]);
